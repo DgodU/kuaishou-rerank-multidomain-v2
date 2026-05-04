@@ -1,0 +1,9 @@
+processed_dir: data/processed_dense
+max_seq_len: 50
+seed: 2025
+use_category: true
+use_caption: false
+use_video_stat: false
+use_dense_features: true
+train_end_date: 20220421
+prior_alpha: 20.0

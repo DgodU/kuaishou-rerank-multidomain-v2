@@ -1,0 +1,35 @@
+experiment_name: ads_paper_psrg_pcrg
+model_name: ads
+seed: 2025
+device: cuda
+data_dir: data/processed
+checkpoint_dir: checkpoints
+log_dir: logs
+output_dir: outputs
+
+max_seq_len: 50
+embedding_dim: 32
+d_s: 64
+d_q: 64
+d_D: 64
+d_attn: 64
+psrg_hidden_dim: 128
+pcrg_hidden_dim: 128
+psrg_eta: 2.0
+dropout: 0.1
+
+batch_size: 2048
+epochs: 20
+lr: 0.001
+weight_decay: 0.000001
+num_workers: 4
+early_stop_patience: 3
+
+use_psrg: true
+use_pcrg: true
+ads_generation_mode: paper
+use_transformer: false
+use_behavior_side: false
+use_category: true
+use_caption: false
+use_video_stat: false

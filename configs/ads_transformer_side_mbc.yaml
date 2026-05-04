@@ -1,0 +1,97 @@
+model_name: ads_transformer_side_mbc
+
+seed: 2025
+device: cuda
+
+data_dir: data/processed
+checkpoint_dir: checkpoints
+log_dir: logs
+output_dir: outputs
+
+max_seq_len: 50
+
+# Embedding
+field_embedding_dim: 16
+sequence_item_dim: 64
+target_item_dim: 64
+domain_dim: 64
+d_attn: 64
+
+# ADS
+psrg_hidden_dim: 128
+pcrg_hidden_dim: 128
+psrg_eta: 2.0
+
+# Side info
+side_dim: 16
+side_output_dim: 32
+
+# Transformer
+transformer_d_model: 64
+transformer_heads: 4
+transformer_layers: 1
+transformer_ffn_dim: 256
+
+# Interest FFN
+interest_ffn_dim: 256
+
+# MBC static interaction
+use_static_mbc: true
+mbc_branch_dim: 128
+mbc_fusion_dim: 64
+mbc_fusion_type: mean
+
+# EFGC
+efgc_group_hidden_dim: 64
+efgc_group_output_dim: 32
+
+# CrossNet
+cross_layers: 2
+cross_low_rank: 16
+
+# DeepNet
+deep_hidden_dims: [256, 128]
+
+# Shared top
+shared_top_hidden_dim: 128
+
+# Auxiliary loss
+use_mbc_aux_loss: false
+mbc_aux_loss_weight: 0.1
+
+# Diversity regularization
+use_mbc_diversity_loss: false
+mbc_diversity_loss_weight: 0.0001
+
+# Final MLP
+final_hidden_dims: [128, 64]
+
+# Regularization
+dropout: 0.1
+weight_decay: 0.000001
+
+# Training
+batch_size: 2048
+epochs: 20
+lr: 0.001
+num_workers: 4
+early_stop_patience: 3
+save_best_auc_checkpoint: true
+
+# Feature switches
+use_category: true
+use_caption: false
+use_video_stat: false
+use_user_onehot_feats: false
+
+# Ablation switches
+use_psrg: true
+use_pcrg: true
+use_transformer: true
+use_behavior_side: true
+use_mbc: true
+use_efgc_branch: true
+use_cross_branch: true
+use_deep_branch: true
+use_static_fusion_gate: true
+static_gate_hidden_dim: 64
