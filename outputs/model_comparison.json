@@ -1316,12 +1316,294 @@
       "best_valid_gauc": 0.675991,
       "best_valid_logloss": 0.573753,
       "test_auc": 0.744039,
-      "test_gauc": 0.658210,
+      "test_gauc": 0.65821,
       "test_logloss": 0.591598,
       "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_transformer_fusion_full_train.log",
       "conclusion": "不推广：author 基线上仅打开 transformer fusion 后，测试 GAUC 低于单独 author 和 MBC seed-2026 确认值，LogLoss 也不优；不作为后续组合优先方向。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 7,
+      "best_valid_auc": 0.762489,
+      "best_valid_gauc": 0.677961,
+      "best_valid_logloss": 0.576842,
+      "test_auc": 0.74571,
+      "test_gauc": 0.661729,
+      "test_logloss": 0.594076,
+      "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_full_train.log",
+      "conclusion": "强正向待确认：author 基线上仅打开 pairwise loss 后测试 GAUC=0.661729，显著高于单独 author、MBC seed-2026 确认值和旧保护候选；但 LogLoss 明显变差，需要 seed-2026 确认稳定性后再判断是否按 GAUC 目标推广。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_confirm_seed2026",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 5,
+      "best_valid_auc": 0.762381,
+      "best_valid_gauc": 0.677294,
+      "best_valid_logloss": 0.573927,
+      "test_auc": 0.745269,
+      "test_gauc": 0.660824,
+      "test_logloss": 0.59167,
+      "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_confirm_seed2026_full_train.log",
+      "conclusion": "确认通过但有 LogLoss 风险：seed-2026 测试 GAUC=0.660824，低于 seed-2025 的 0.661729 但仍高于旧保护候选 0.660225、单独 author 和 MBC seed-2026；LogLoss 仍弱于 author，需要继续 seed-2027 稳定性确认。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_confirm_seed2027",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 8,
+      "best_valid_auc": 0.762078,
+      "best_valid_gauc": 0.679444,
+      "best_valid_logloss": 0.578821,
+      "test_auc": 0.744491,
+      "test_gauc": 0.660513,
+      "test_logloss": 0.597118,
+      "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_confirm_seed2027_full_train.log",
+      "conclusion": "三 seed 确认通过但有明显 LogLoss 风险：seed-2027 测试 GAUC=0.660513，低于 seed-2025/2026 但仍高于旧保护候选 0.660225；三 seed GAUC 均值=0.661022、最小值=0.660513，按 GAUC 口径可作为新候选，但 LogLoss 均值=0.594288 明显弱于 author。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_confirm_seed2028",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 6,
+      "best_valid_auc": 0.762655,
+      "best_valid_gauc": 0.677204,
+      "best_valid_logloss": 0.575699,
+      "test_auc": 0.745492,
+      "test_gauc": 0.660215,
+      "test_logloss": 0.593031,
+      "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_confirm_seed2028_full_train.log",
+      "conclusion": "四 seed 确认边界通过但不稳：seed-2028 测试 GAUC=0.660215，略低于旧保护候选 0.660225；四 seed GAUC 均值=0.660820 仍高于旧保护候选和单独 author，但最低 seed 不再全超过旧保护候选，且 LogLoss 均值=0.593974 明显弱于 author。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_rank_calib_split",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 7,
+      "best_valid_auc": 0.762986,
+      "best_valid_gauc": 0.676253,
+      "best_valid_logloss": 0.576056,
+      "best_valid_ranking_gauc": 0.664644,
+      "test_auc": 0.746781,
+      "test_gauc": 0.660064,
+      "test_logloss": 0.592684,
+      "test_ranking_auc": 0.736113,
+      "test_ranking_gauc": 0.646507,
+      "test_ranking_logloss": 0.599827,
+      "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_rank_calib_split_full_train.log",
+      "conclusion": "不推广：在 author_pairwise_loss 上叠加 rank_calib_split 后，final LogLoss 相比 pairwise seed-2025 和 4-seed 均值有小幅改善，但仍弱于单独 author；final GAUC=0.660064 低于旧保护候选 0.660225、pairwise seed-2028 低点 0.660215 和 pairwise 4-seed 均值 0.660820，ranking 分支 GAUC=0.646507 明显不可用，未解决 pairwise 的校准/稳定性风险。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_w005",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 5,
+      "best_valid_auc": 0.762646,
+      "best_valid_gauc": 0.677335,
+      "best_valid_logloss": 0.57395,
+      "test_auc": 0.745646,
+      "test_gauc": 0.661038,
+      "test_logloss": 0.591449,
+      "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_w005_full_train.log",
+      "conclusion": "正向待 seed 确认：在 author_pairwise_loss 上仅将 pairwise_loss_weight 从 trainer 默认 0.1 降到 0.05 后，test GAUC=0.661038，高于旧保护候选 0.660225、单独 author 0.658705 和 pairwise 4-seed 均值 0.660820；test LogLoss=0.591449，优于单独 author 0.591782 且显著优于 pairwise 4-seed 均值 0.593974。需要 seed-2026 确认稳定性。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_w005_confirm_seed2026",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 5,
+      "best_valid_auc": 0.76217,
+      "best_valid_gauc": 0.677249,
+      "best_valid_logloss": 0.574381,
+      "test_auc": 0.744471,
+      "test_gauc": 0.659229,
+      "test_logloss": 0.592751,
+      "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_w005_confirm_seed2026_full_train.log",
+      "conclusion": "两 seed 确认未通过：w005 seed-2026 测试 GAUC=0.659229，低于 seed-2025 的 0.661038、旧保护候选 0.660225 和原 pairwise seed-2026 0.660824；LogLoss=0.592751，也弱于 w005 seed-2025 0.591449 和单独 author 0.591782。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_w002",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 4,
+      "best_valid_auc": 0.762225,
+      "best_valid_gauc": 0.675937,
+      "best_valid_logloss": 0.573228,
+      "test_auc": 0.743851,
+      "test_gauc": 0.659645,
+      "test_logloss": 0.592005,
+      "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_w002_full_train.log",
+      "conclusion": "不推广：在 author_pairwise_loss 上仅将 pairwise_loss_weight 从默认 0.1 降到 0.02 后，test GAUC=0.659645，低于旧保护候选 0.660225、w005 seed-2025 0.661038、原 pairwise 4-seed mean 0.660820；test LogLoss=0.592005，虽优于原 pairwise 4-seed mean 0.593974，但仍弱于单独 author 0.591782。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_target_tag",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 3,
+      "best_valid_auc": 0.760525,
+      "best_valid_gauc": 0.674889,
+      "best_valid_logloss": 0.573552,
+      "test_auc": 0.741628,
+      "test_gauc": 0.65733,
+      "test_logloss": 0.592329,
+      "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_target_tag_full_train.log",
+      "conclusion": "不推广：author 基线上仅打开 target_tag embedding 后，测试 GAUC=0.657330，低于单独 author 0.658705、MBC seed-2026 确认值 0.659100 和 pairwise loss 三 seed；AUC 与 LogLoss 也弱于 author。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_auxrank",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 4,
+      "best_valid_auc": 0.761886,
+      "best_valid_gauc": 0.674891,
+      "best_valid_logloss": 0.574013,
+      "test_auc": 0.744315,
+      "test_gauc": 0.657478,
+      "test_logloss": 0.591834,
+      "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_auxrank_full_train.log",
+      "conclusion": "不推广：author 基线上仅打开 auxiliary rank loader 后，测试 GAUC=0.657478，低于单独 author 0.658705、MBC seed-2026 确认值 0.659100 和 pairwise loss 三 seed；AUC 略高但不足以弥补 GAUC 回退。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_user_group_sampler",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 1,
+      "best_valid_auc": 0.734242,
+      "best_valid_gauc": 0.669113,
+      "best_valid_logloss": 0.593775,
+      "test_auc": 0.713685,
+      "test_gauc": 0.652894,
+      "test_logloss": 0.610815,
+      "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_user_group_sampler_full_train.log",
+      "conclusion": "拒绝：author 基线上仅启用 user-group batch sampler 后，测试 GAUC=0.652894，显著低于单独 author 0.658705、MBC seed-2026 确认值 0.659100 和 pairwise loss 三 seed；AUC 与 LogLoss 也大幅退化。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_mbc_diversity",
+      "model_name": "ads_transformer_side",
+      "mode": "debug_noop",
+      "best_valid_epoch": 1,
+      "best_valid_auc": 0.669817,
+      "best_valid_gauc": 0.618187,
+      "best_valid_logloss": 0.637206,
+      "test_auc": 0.668442,
+      "test_gauc": 0.608544,
+      "test_logloss": 0.640221,
+      "source_log": "logs/ads_transformer_side_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_mbc_diversity_debug.log",
+      "conclusion": "确认 no-op，不启动 full：当前 ads_transformer_side 的 MBC slices 仅输出 branch_vectors['mbc_semantic']，训练器的 diversity loss 只对 efgc/cross/deep 三分支计算；debug 中 train_diversity_loss=0.000000。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_all_pairs",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 7,
+      "best_valid_auc": 0.762718,
+      "best_valid_gauc": 0.678983,
+      "best_valid_logloss": 0.57638,
+      "test_auc": 0.745406,
+      "test_gauc": 0.661359,
+      "test_logloss": 0.594038,
+      "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_all_pairs_full_train.log",
+      "conclusion": "不做 seed 确认：在 author_pairwise_loss 上仅将 pairwise_loss_mode 从默认 hardest 改为 all_pairs 后，test GAUC=0.661359，高于旧保护候选 0.660225 和 pairwise 4-seed 均值 0.660820，但低于原 pairwise seed-2025 0.661729；test LogLoss=0.594038，几乎等同于原 pairwise seed-2025 0.594076 且弱于 author 0.591782 与 w005 seed-2025 0.591449，未修复校准/LogLoss 风险。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pcrg_token_side_attention_gate",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 4,
+      "best_valid_auc": 0.76214,
+      "best_valid_gauc": 0.676005,
+      "best_valid_logloss": 0.573288,
+      "test_auc": 0.74441,
+      "test_gauc": 0.659535,
+      "test_logloss": 0.591252,
+      "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pcrg_token_side_attention_gate_full_train.log",
+      "conclusion": "不做 seed 确认：在 author_pcrg_token 上仅开启 use_side_attention_gate 后，test GAUC=0.659535，高于单独 author 0.658705 和 side_attention_gate seed-2025 0.659072，但低于 author_pcrg_token seed-2025 0.660004、旧保护候选 0.660225 和 pairwise 系列候选；test LogLoss=0.591252，接近 author_pcrg_token 0.591190 且优于单独 author 0.591782，但 GAUC 不足以进入确认。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pcrg_token_zero_init_bias",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 2,
+      "best_valid_auc": 0.75724,
+      "best_valid_gauc": 0.674646,
+      "best_valid_logloss": 0.575005,
+      "test_auc": 0.739316,
+      "test_gauc": 0.65553,
+      "test_logloss": 0.592326,
+      "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pcrg_token_zero_init_bias_full_train.log",
+      "conclusion": "拒绝：在 author_pcrg_token 上仅开启 zero_init_side_attention_bias 后，test GAUC=0.655530，显著低于 author_pcrg_token seed-2025 0.660004、单独 author 0.658705、author_zero_init_bias 0.658722 和旧保护候选 0.660225；test LogLoss=0.592326 也弱于 author_pcrg_token 0.591190 和单独 author 0.591782。不 seed 确认、不推广。"
     }
   ],
+  "author_single_switch_summary_20260504": {
+    "baseline": {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author",
+      "test_auc": 0.743898,
+      "test_gauc": 0.658705,
+      "test_logloss": 0.591782
+    },
+    "strongest_candidate_by_test_gauc": {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss",
+      "single_seed_test_auc": 0.74571,
+      "single_seed_test_gauc": 0.661729,
+      "single_seed_test_logloss": 0.594076,
+      "multiseed_test_gauc_mean": 0.66082,
+      "multiseed_test_gauc_min": 0.660215,
+      "multiseed_test_gauc_max": 0.661729,
+      "multiseed_test_logloss_mean": 0.593974,
+      "verdict": "GAUC 均值仍可作为候选信号，但 seed-2028 略低于旧保护候选，且有明显 LogLoss/校准风险。"
+    },
+    "not_promoted_single_switches": [
+      "target_tag",
+      "aux_rank_loader",
+      "user_group_sampler",
+      "dynamic_mbc_gate",
+      "mbc_aux_loss",
+      "time_context",
+      "position_bias_tower",
+      "user_profile_context",
+      "user_onehot_context",
+      "transformer_fusion"
+    ],
+    "noop_or_do_not_run": [
+      {
+        "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_mbc_diversity",
+        "reason": "ads_transformer_side 只输出 mbc_semantic branch vector，当前 trainer 的 diversity loss 需要 efgc/cross/deep，因此 debug 中 train_diversity_loss=0。"
+      }
+    ],
+    "coverage": {
+      "built_author_configs_tracked": true,
+      "untracked_author_configs": []
+    },
+    "conclusion": "author 基线单开关/no-new-data 队列已覆盖；pairwise loss 四 seed GAUC 均值仍高于旧保护候选，但最低 seed 略低于旧保护候选且 LogLoss/校准风险明显；其余单开关不推广、拒绝或 no-op。若业务目标同时重视 LogLoss/校准，不建议直接替换为 pairwise loss。"
+  },
+  "author_pairwise_loss_multiseed_summary_20260504": {
+    "metric": "test_gauc",
+    "seeds": [
+      2025,
+      2026,
+      2027,
+      2028
+    ],
+    "test_auc_mean": 0.745241,
+    "test_auc_min": 0.744491,
+    "test_auc_max": 0.74571,
+    "test_gauc_mean": 0.66082,
+    "test_gauc_min": 0.660215,
+    "test_gauc_max": 0.661729,
+    "test_gauc_sample_std": 0.000655,
+    "test_logloss_mean": 0.593974,
+    "test_logloss_min": 0.59167,
+    "test_logloss_max": 0.597118,
+    "test_logloss_sample_std": 0.002316,
+    "baseline_reference": {
+      "author_seed2025_test_gauc": 0.658705,
+      "mbc_seed2026_confirm_test_gauc": 0.6591,
+      "old_protection_candidate_test_gauc": 0.660225
+    },
+    "conclusion": "GAUC 口径边界通过：author + pairwise loss 四 seed 测试 GAUC 均值 0.660820，高于旧保护候选 0.660225 和单独 author 0.658705；但 seed-2028=0.660215 略低于旧保护候选，最低值不再全超过，且 LogLoss 均值 0.593974 明显弱于 author。若业务目标包含校准/LogLoss，不应直接替换。"
+  },
   "multiseed_summary_20260503": {
     "metric": "test_gauc",
     "seeds": [
@@ -1410,5 +1692,135 @@
       ]
     },
     "conclusion": "gate008 mean is below protected; no_psrg_no_pcrg mean is effectively tied with protected but within seed noise and has worse average LogLoss, so neither is promoted."
+  },
+  "author_pairwise_calibration_repair_20260504": {
+    "base_candidate": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss",
+    "experiment": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_rank_calib_split",
+    "single_variable_change": "turn on use_rank_calib_split while keeping use_pairwise_loss=true",
+    "test_auc": 0.746781,
+    "test_gauc": 0.660064,
+    "test_logloss": 0.592684,
+    "test_ranking_gauc": 0.646507,
+    "test_ranking_logloss": 0.599827,
+    "references": {
+      "author_baseline_test_gauc": 0.658705,
+      "author_baseline_test_logloss": 0.591782,
+      "pairwise_4seed_test_gauc_mean": 0.66082,
+      "pairwise_4seed_test_gauc_min": 0.660215,
+      "pairwise_4seed_test_logloss_mean": 0.593974,
+      "old_protection_candidate_test_gauc": 0.660225
+    },
+    "conclusion": "rank_calib_split gives a modest final LogLoss improvement versus pairwise_loss average, but final LogLoss remains worse than author and final GAUC falls below old protection and pairwise 4-seed min; ranking branch is much worse. Do not promote; pairwise calibration risk remains unresolved."
+  },
+  "author_pairwise_weight_sweep_20260504": {
+    "base_candidate": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss",
+    "experiment": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_w005",
+    "single_variable_change": "set pairwise_loss_weight from trainer default 0.1 to 0.05 while keeping use_pairwise_loss=true",
+    "seeds": [
+      2025,
+      2026
+    ],
+    "per_seed": {
+      "2025": {
+        "test_auc": 0.745646,
+        "test_gauc": 0.661038,
+        "test_logloss": 0.591449
+      },
+      "2026": {
+        "test_auc": 0.744471,
+        "test_gauc": 0.659229,
+        "test_logloss": 0.592751
+      }
+    },
+    "test_auc_mean": 0.745058,
+    "test_auc_min": 0.744471,
+    "test_auc_max": 0.745646,
+    "test_gauc_mean": 0.660133,
+    "test_gauc_min": 0.659229,
+    "test_gauc_max": 0.661038,
+    "test_logloss_mean": 0.5921,
+    "test_logloss_min": 0.591449,
+    "test_logloss_max": 0.592751,
+    "references": {
+      "author_baseline_test_gauc": 0.658705,
+      "author_baseline_test_logloss": 0.591782,
+      "author_seed2026_test_gauc": 0.657828,
+      "author_seed2026_test_logloss": 0.591852,
+      "pairwise_4seed_test_gauc_mean": 0.66082,
+      "pairwise_4seed_test_gauc_min": 0.660215,
+      "pairwise_4seed_test_logloss_mean": 0.593974,
+      "old_protection_candidate_test_gauc": 0.660225
+    },
+    "conclusion": "Do not promote and do not continue seed2027: seed2025 was promising, but seed2026 regressed. Two-seed GAUC mean=0.660133 and min=0.659229 are below the old protected candidate 0.660225, and LogLoss mean=0.592100 is still worse than author baseline 0.591782. Weight 0.05 reduces LogLoss damage vs original pairwise but does not provide stable promotion signal.",
+    "w002": {
+      "single_variable_change": "set pairwise_loss_weight from trainer default 0.1 to 0.02 while keeping use_pairwise_loss=true",
+      "seed": 2025,
+      "test_auc": 0.743851,
+      "test_gauc": 0.659645,
+      "test_logloss": 0.592005,
+      "conclusion": "Not promoted; too weak to keep pairwise GAUC benefit and still not better than author LogLoss."
+    },
+    "final_conclusion": "Pairwise weight repair did not produce a stable promotable setting. Weight 0.05 had a strong seed2025 but failed seed2026 confirmation; weight 0.02 reduced the signal further with GAUC below old protected and LogLoss still worse than author. Stop this weight sweep unless explicitly requested."
+  },
+  "author_pairwise_mode_sweep_20260504": {
+    "base_candidate": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss",
+    "experiment": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_all_pairs",
+    "single_variable_change": "set pairwise_loss_mode from trainer default hardest to all_pairs while keeping use_pairwise_loss=true and pairwise_loss_weight at default 0.1",
+    "seed": 2025,
+    "test_auc": 0.745406,
+    "test_gauc": 0.661359,
+    "test_logloss": 0.594038,
+    "references": {
+      "author_baseline_test_gauc": 0.658705,
+      "author_baseline_test_logloss": 0.591782,
+      "original_pairwise_seed2025_test_gauc": 0.661729,
+      "original_pairwise_seed2025_test_logloss": 0.594076,
+      "pairwise_4seed_test_gauc_mean": 0.66082,
+      "pairwise_4seed_test_logloss_mean": 0.593974,
+      "w005_seed2025_test_gauc": 0.661038,
+      "w005_seed2025_test_logloss": 0.591449,
+      "old_protection_candidate_test_gauc": 0.660225
+    },
+    "conclusion": "all_pairs keeps a strong single-seed GAUC signal, but it does not repair LogLoss/calibration; LogLoss is effectively the same as original hardest pairwise and worse than author and w005. Do not seed-confirm for calibration repair unless the business explicitly chooses GAUC-only optimization."
+  },
+  "author_pcrg_token_gate_combo_20260504": {
+    "base_candidate": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pcrg_token",
+    "experiment": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pcrg_token_side_attention_gate",
+    "single_variable_change": "turn on use_side_attention_gate on top of author_pcrg_token",
+    "seed": 2025,
+    "test_auc": 0.74441,
+    "test_gauc": 0.659535,
+    "test_logloss": 0.591252,
+    "references": {
+      "author_baseline_test_gauc": 0.658705,
+      "author_baseline_test_logloss": 0.591782,
+      "author_pcrg_token_seed2025_test_gauc": 0.660004,
+      "author_pcrg_token_seed2025_test_logloss": 0.59119,
+      "author_pcrg_token_4seed_test_gauc_mean": 0.658521,
+      "author_side_attention_gate_seed2025_test_gauc": 0.659072,
+      "author_side_attention_gate_seed2025_test_logloss": 0.591468,
+      "author_side_attention_gate_seed2026_test_gauc": 0.657803,
+      "old_protection_candidate_test_gauc": 0.660225
+    },
+    "conclusion": "The combo improves over author baseline and side_attention_gate seed2025 while preserving good LogLoss, but it underperforms author_pcrg_token seed2025 and old protection by GAUC. Do not seed-confirm or promote."
+  },
+  "author_pcrg_token_zero_init_bias_20260504": {
+    "base_candidate": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pcrg_token",
+    "experiment": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pcrg_token_zero_init_bias",
+    "single_variable_change": "turn on zero_init_side_attention_bias on top of author_pcrg_token",
+    "seed": 2025,
+    "test_auc": 0.739316,
+    "test_gauc": 0.65553,
+    "test_logloss": 0.592326,
+    "references": {
+      "author_baseline_test_gauc": 0.658705,
+      "author_baseline_test_logloss": 0.591782,
+      "author_zero_init_bias_test_gauc": 0.658722,
+      "author_zero_init_bias_test_logloss": 0.591704,
+      "author_pcrg_token_seed2025_test_gauc": 0.660004,
+      "author_pcrg_token_seed2025_test_logloss": 0.59119,
+      "old_protection_candidate_test_gauc": 0.660225
+    },
+    "conclusion": "zero_init_side_attention_bias badly hurts ranking when added to author_pcrg_token and does not improve LogLoss. Reject; do not seed-confirm."
   }
 }

@@ -696,3 +696,162 @@ Debug 验收：
 - IPS/SNIPS 未实现。
 
 推荐下一步：先不要 full run 所有配置。按 prompt 顺序从同协议 baseline 开始，只选择一个方向做 full run，并与同协议 baseline 比较。
+
+## 12. 2026-05-04 author 基线单开关队列闭环补充
+
+后续已经围绕 `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author` 完成一轮低风险、无新数据、单开关实验。结果已同步到：
+
+- `outputs/model_comparison.json`
+- `experiments/results_tracking.md`
+
+当前 author baseline 指标：
+
+| 实验 | test AUC | test GAUC | test LogLoss | 结论 |
+|---|---:|---:|---:|---|
+| `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author` | 0.743898 | 0.658705 | 0.591782 | author 单独基线 |
+
+唯一按 GAUC 均值仍有候选信号的单开关是：
+
+| 实验 | seeds | test GAUC mean | test GAUC min | test GAUC max | test LogLoss mean | 结论 |
+|---|---:|---:|---:|---:|---:|---|
+| `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss` | 2025/2026/2027/2028 | 0.660820 | 0.660215 | 0.661729 | 0.593974 | GAUC 均值高于旧保护候选，但 seed-2028 最低值略低于旧保护候选，且 LogLoss/校准风险明显 |
+
+已完成且不推广或拒绝的 author 单开关包括：
+
+- `target_tag`
+- `aux_rank_loader`
+- `user_group_sampler`
+- `dynamic_mbc_gate`
+- `mbc_aux_loss`
+- `time_context`
+- `position_bias_tower`
+- `user_profile_context`
+- `user_onehot_context`
+- `transformer_fusion`
+
+`author_mbc_diversity` 已确认是当前 `ads_transformer_side` 路径下的 no-op：模型只输出 `branch_vectors["mbc_semantic"]`，而 trainer 的 diversity loss 只在存在 `efgc/cross/deep` 三分支时计算；debug 日志中 `train_diversity_loss=0.000000`。因此不应启动 full run。
+
+最终覆盖状态：
+
+- 所有已建 `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author*.yaml` 配置均已追踪。
+- 当前无未记录 author 配置。
+- seed2028 full 已完成并记录；当前无训练或 preprocess 进程。
+
+推荐下一步：不要继续重复 author 单开关 full run。若业务主目标是 GAUC，可以把 `author_pairwise_loss` 作为边界候选进入更正式的业务评估；若同时重视 LogLoss 或校准，不建议直接替换当前保护候选。
+
+## 13. 2026-05-04 pairwise 校准修复尝试
+
+在 `author_pairwise_loss` 四 seed 结论显示 GAUC 有边界信号但 LogLoss/校准风险明显之后，继续做了一个低风险、无新数据、单变量校准修复实验：
+
+| 实验 | 单变量改动 | test AUC | test GAUC | test LogLoss | 额外分支 | 结论 |
+|---|---|---:|---:|---:|---|---|
+| `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_rank_calib_split` | 在 `author_pairwise_loss` 上仅开启 `use_rank_calib_split` | 0.746781 | 0.660064 | 0.592684 | ranking GAUC/LogLoss=0.646507/0.599827 | 不推广 |
+
+结论：
+
+- final LogLoss 相比 pairwise 4-seed 均值 0.593974 有小幅改善，但仍弱于单独 author 0.591782。
+- final GAUC=0.660064 低于旧保护候选 0.660225、pairwise seed-2028 低点 0.660215 和 pairwise 4-seed 均值 0.660820。
+- ranking 分支明显不可用，测试 GAUC=0.646507、LogLoss=0.599827。
+- 因此 `rank_calib_split` 未解决 pairwise 的校准/稳定性风险，不应推广。
+
+推荐后续若继续沿 pairwise 修复方向，只做更小步的单变量强度调节，例如降低 `pairwise_loss_weight`，不要叠加新结构。
+
+## 14. 2026-05-04 pairwise loss 权重减半尝试
+
+沿 pairwise 修复方向继续做了更小步的单变量强度调节：
+
+| 实验 | 单变量改动 | test AUC | test GAUC | test LogLoss | 结论 |
+|---|---|---:|---:|---:|---|
+| `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_w005` | 在 `author_pairwise_loss` 上仅将 `pairwise_loss_weight` 从 trainer 默认 0.1 降到 0.05 | 0.745646 | 0.661038 | 0.591449 | 正向待 seed 确认 |
+| `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_w005_confirm_seed2026` | 在 w005 上仅改 seed=2026 | 0.744471 | 0.659229 | 0.592751 | 确认未通过 |
+| `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_w002` | 在 `author_pairwise_loss` 上仅将 `pairwise_loss_weight` 从 trainer 默认 0.1 降到 0.02 | 0.743851 | 0.659645 | 0.592005 | 不推广 |
+
+对比：
+
+- seed-2025 单次 GAUC 高于旧保护候选 0.660225、单独 author 0.658705 和 pairwise 4-seed 均值 0.660820。
+- seed-2025 单次 LogLoss 优于单独 author 0.591782，并显著优于 pairwise 4-seed LogLoss 均值 0.593974。
+- seed-2026 确认回落明显，测试 GAUC=0.659229，低于 seed-2025 的 0.661038、旧保护候选 0.660225 和原 pairwise seed-2026 0.660824；LogLoss=0.592751，也弱于 w005 seed-2025 0.591449 和单独 author 0.591782。
+- 两 seed GAUC mean/min/max=0.660133/0.659229/0.661038，mean 和 min 均未超过旧保护候选 0.660225。
+- 两 seed LogLoss mean=0.592100，优于原 pairwise 4-seed mean 0.593974，但仍弱于单独 author 0.591782。
+- `pairwise_loss_weight=0.02` 测试 GAUC=0.659645，低于旧保护候选 0.660225、w005 seed-2025 0.661038 和原 pairwise 4-seed 均值 0.660820；测试 LogLoss=0.592005 虽优于原 pairwise 4-seed 均值 0.593974，但仍弱于单独 author 0.591782。
+- 结论：`pairwise_loss_weight=0.05` 能缓解原 pairwise 的 LogLoss 伤害但稳定性不足；`pairwise_loss_weight=0.02` 排序收益不足。二者均不推广。
+
+推荐下一步：pairwise 权重修复队列暂时停止；不要继续 seed-2027，也不要继续在 pairwise loss 上做更多结构叠加。若业务只看 GAUC，可回到原 `author_pairwise_loss` 四 seed 边界候选；若重视 LogLoss/校准，不建议推广当前 pairwise 系列。
+
+## 15. 2026-05-04 当前收尾状态
+
+已完成一次记录一致性审计：
+
+- `configs/` 下 42 个 `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author*.yaml` 配置均已在 `experiments/results_tracking.md` 中记录。
+- 这 42 个配置也均已在 `outputs/model_comparison.json` 的 `runs` 中记录。
+- 当前没有 `scripts/train.py` 或 `scripts/preprocess.py` 进程在运行。
+- pairwise 校准/LogLoss 修复方向已覆盖 `rank_calib_split`、`pairwise_loss_weight=0.05` 和 `pairwise_loss_weight=0.02`，均不形成稳定可推广结果。
+
+当前建议：
+
+- 不再继续 author 单开关/no-new-data 队列，避免重复实验。
+- 不再继续当前 pairwise 修复队列，除非明确改变业务目标或接受 LogLoss 风险。
+- 若业务目标只看 GAUC，可把原 `author_pairwise_loss` 作为四 seed 边界候选进入更正式业务评估。
+- 若业务同时重视 LogLoss/校准，则当前最稳妥结论仍是不推广 pairwise 系列。
+
+## 16. 2026-05-04 pairwise all-pairs 形态尝试
+
+用户明确要求继续实验后，新增一个 pairwise loss 形态单变量实验：
+
+| 实验 | 单变量改动 | test AUC | test GAUC | test LogLoss | 结论 |
+|---|---|---:|---:|---:|---|
+| `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pairwise_loss_all_pairs` | 在 `author_pairwise_loss` 上仅将 `pairwise_loss_mode` 从默认 hardest 改为 all_pairs，保持 `use_pairwise_loss=true` 和默认 `pairwise_loss_weight=0.1` | 0.745406 | 0.661359 | 0.594038 | 不做 seed 确认 |
+
+对比：
+
+- test GAUC=0.661359，高于旧保护候选 0.660225 和原 pairwise 4-seed 均值 0.660820。
+- test GAUC 低于原 pairwise seed-2025 的 0.661729。
+- test LogLoss=0.594038，几乎等同于原 pairwise seed-2025 的 0.594076，也略弱于原 pairwise 4-seed LogLoss 均值 0.593974。
+- test LogLoss 明显弱于单独 author 0.591782 和 w005 seed-2025 0.591449。
+
+结论：
+
+- `all_pairs` 保留了 pairwise 的排序信号，但没有修复校准/LogLoss 风险。
+- 若目标是 pairwise calibration repair，不建议 seed 确认。
+- 除非业务明确转为 GAUC-only，否则不继续围绕 all_pairs 做多 seed。
+
+## 17. 2026-05-04 author+pcrg_token side attention gate 组合尝试
+
+在 pairwise 修复方向无法改善 LogLoss 后，继续做一个非 pairwise、无新数据、低风险的组合验证：
+
+| 实验 | 单变量改动 | test AUC | test GAUC | test LogLoss | 结论 |
+|---|---|---:|---:|---:|---|
+| `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pcrg_token_side_attention_gate` | 在 `author_pcrg_token` 上仅开启 `use_side_attention_gate` | 0.744410 | 0.659535 | 0.591252 | 不做 seed 确认 |
+
+对比：
+
+- 相比单独 author：GAUC 0.659535 高于 0.658705，LogLoss 0.591252 优于 0.591782。
+- 相比单独 side_attention_gate seed-2025：GAUC 高于 0.659072，LogLoss 优于 0.591468。
+- 相比 author_pcrg_token seed-2025：GAUC 低于 0.660004，LogLoss 也略弱于 0.591190。
+- 相比旧保护候选：GAUC 低于 0.660225。
+
+结论：
+
+- 该组合保留了较好 LogLoss，但没有带来排序增益。
+- 不进入 seed 确认，不作为推广候选。
+
+## 18. 2026-05-04 author+pcrg_token zero-init 初始化尝试
+
+在 `author_pcrg_token` 上继续测试更保守的初始化单开关：
+
+| 实验 | 单变量改动 | test AUC | test GAUC | test LogLoss | 结论 |
+|---|---|---:|---:|---:|---|
+| `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pcrg_token_zero_init_bias` | 在 `author_pcrg_token` 上仅开启 `zero_init_side_attention_bias` | 0.739316 | 0.655530 | 0.592326 | 拒绝 |
+
+对比：
+
+- 低于 author_pcrg_token seed-2025 GAUC 0.660004。
+- 低于单独 author GAUC 0.658705。
+- 低于 author_zero_init_bias GAUC 0.658722。
+- 低于旧保护候选 GAUC 0.660225。
+- LogLoss 0.592326 也弱于 author_pcrg_token 0.591190 和单独 author 0.591782。
+
+结论：
+
+- `zero_init_side_attention_bias` 与 author+pcrg_token 组合不兼容或收益不稳定。
+- 不做 seed 确认，不推广。
