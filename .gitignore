@@ -13,7 +13,7 @@ venv/
 env/
 
 # Local data and generated artifacts
-data
+/data
 checkpoints/
 logs/
 nohup.out

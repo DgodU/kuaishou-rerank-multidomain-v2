@@ -13,6 +13,7 @@ from src.models.layers import ResidualFFN
 from src.models.mbc_slices import MBCSemanticHead
 from src.models.pcrg_token import PCRGTokenLayer
 from src.models.position_bias import PositionBiasTower
+from src.models.semantic_features import SemanticLongShortInterest, SimTierEncoder, VideoSemanticEncoder
 from src.models.transformer_fusion import TransformerFusion
 
 
@@ -208,9 +209,95 @@ class ADSTransformerSideModel(ADSModel):
         self.use_long_short_interest = bool(config.get("use_long_short_interest", False))
         self.use_user_conditioned_mbc_gate = bool(config.get("use_user_conditioned_mbc_gate", False))
         self.use_video_semantic_emb = bool(config.get("use_video_semantic_emb", False))
+        self.use_simtier_features = bool(config.get("use_simtier_features", False))
+        self.use_semantic_long_short = bool(config.get("use_semantic_long_short", False))
+        self.use_semantic_late_fusion = bool(config.get("use_semantic_late_fusion", False))
+        self.semantic_inject = str(config.get("semantic_inject", "mbc_slice"))
         self.use_semantic_match_features = bool(config.get("use_semantic_match_features", False))
         self.mbc_semantic_head = None
         self.mbc_gate_logit = None
+        self.semantic_input_dim = int(feature_maps.get("semantic_dim", 0)) or int(config.get("semantic_proj_input_dim", config.get("semantic_proj_dim", 64)))
+        self.semantic_proj_dim = int(config.get("semantic_proj_dim", 64))
+        self.simtier_input_dim = int(feature_maps.get("simtier_dim", 0))
+        self.simtier_dim = int(config.get("simtier_dim", 64))
+        self.semantic_target_scale = float(config.get("semantic_target_scale", 1.0))
+        self.simtier_scale = float(config.get("simtier_scale", 1.0))
+        self.use_semantic_slice_gates = bool(config.get("use_semantic_slice_gates", False))
+        self.use_semantic_gate_regularization = bool(config.get("use_semantic_gate_regularization", False))
+        self.semantic_target_gate_reg_target = float(config.get("semantic_target_gate_reg_target", config.get("semantic_target_gate_init", 1.0)))
+        self.semantic_target_gate_reg_target = min(max(self.semantic_target_gate_reg_target, 1e-4), 1.0 - 1e-4)
+        self.simtier_gate_reg_target = float(config.get("simtier_gate_reg_target", config.get("simtier_gate_init", 0.5)))
+        self.simtier_gate_reg_target = min(max(self.simtier_gate_reg_target, 1e-4), 1.0 - 1e-4)
+        self.semantic_target_gate_logit = None
+        self.simtier_gate_logit = None
+        self.semantic_encoder = None
+        self.simtier_encoder = None
+        self.semantic_long_short = None
+        self.semantic_late_fusion_head = None
+        self.semantic_late_fusion_gate_logit = None
+        if self.use_video_semantic_emb:
+            self.semantic_encoder = VideoSemanticEncoder(
+                raw_dim=self.semantic_input_dim,
+                semantic_proj_dim=self.semantic_proj_dim,
+                semantic_dropout=float(config.get("semantic_dropout", config.get("dropout", 0.1))),
+            )
+        if self.use_simtier_features and self.simtier_input_dim > 0:
+            self.simtier_encoder = SimTierEncoder(
+                simtier_input_dim=self.simtier_input_dim,
+                simtier_dim=self.simtier_dim,
+                simtier_dropout=float(config.get("simtier_dropout", config.get("dropout", 0.1))),
+            )
+        if self.use_semantic_slice_gates:
+            semantic_target_gate_init = float(config.get("semantic_target_gate_init", 1.0))
+            semantic_target_gate_init = min(max(semantic_target_gate_init, 1e-4), 1.0 - 1e-4)
+            simtier_gate_init = float(config.get("simtier_gate_init", 0.5))
+            simtier_gate_init = min(max(simtier_gate_init, 1e-4), 1.0 - 1e-4)
+            if self.semantic_encoder is not None:
+                self.semantic_target_gate_logit = nn.Parameter(
+                    torch.tensor(math.log(semantic_target_gate_init / (1.0 - semantic_target_gate_init)), dtype=torch.float32)
+                )
+            if self.simtier_encoder is not None:
+                self.simtier_gate_logit = nn.Parameter(
+                    torch.tensor(math.log(simtier_gate_init / (1.0 - simtier_gate_init)), dtype=torch.float32)
+                )
+        if self.use_semantic_long_short and self.use_video_semantic_emb:
+            semantic_interest_dim = int(config.get("semantic_long_short_dim", self.semantic_proj_dim))
+            self.semantic_long_short = SemanticLongShortInterest(
+                raw_dim=self.semantic_input_dim,
+                target_dim=self.semantic_proj_dim,
+                interest_dim=semantic_interest_dim,
+                gate_hidden_dim=int(config.get("semantic_long_short_gate_hidden_dim", 64)),
+                short_history_len=int(config.get("short_history_len", 10)),
+                history_order=str(config.get("history_order", "old_to_new")),
+                simtier_dim=self.simtier_dim if self.simtier_encoder is not None else 0,
+                target_repr_dim=self.d_q,
+                domain_repr_dim=self.d_D,
+                dropout=float(config.get("semantic_dropout", config.get("dropout", 0.1))),
+            )
+        if self.use_semantic_late_fusion:
+            semantic_late_fusion_input_dim = self.d_attn + self.d_q + self.embedding_dim + self.d_D
+            if self.semantic_encoder is not None:
+                semantic_late_fusion_input_dim += self.semantic_proj_dim
+            if self.simtier_encoder is not None:
+                semantic_late_fusion_input_dim += self.simtier_dim
+            if self.semantic_long_short is not None:
+                semantic_late_fusion_input_dim += int(config.get("semantic_long_short_dim", self.semantic_proj_dim))
+            semantic_late_fusion_hidden_dim = int(config.get("semantic_late_fusion_hidden_dim", 64))
+            self.semantic_late_fusion_head = nn.Sequential(
+                nn.LayerNorm(semantic_late_fusion_input_dim),
+                nn.Linear(semantic_late_fusion_input_dim, semantic_late_fusion_hidden_dim),
+                nn.GELU(),
+                nn.Dropout(float(config.get("semantic_late_fusion_dropout", config.get("dropout", 0.1)))),
+                nn.Linear(semantic_late_fusion_hidden_dim, 1),
+            )
+            semantic_late_fusion_gate_init = float(config.get("semantic_late_fusion_gate_init", 0.05))
+            semantic_late_fusion_gate_init = min(max(semantic_late_fusion_gate_init, 1e-4), 1.0 - 1e-4)
+            self.semantic_late_fusion_gate_logit = nn.Parameter(
+                torch.tensor(
+                    math.log(semantic_late_fusion_gate_init / (1.0 - semantic_late_fusion_gate_init)),
+                    dtype=torch.float32,
+                )
+            )
         self.mbc_slice_dims = {
             "interest": self.d_attn,
             "target": self.d_q,
@@ -218,6 +305,12 @@ class ADSTransformerSideModel(ADSModel):
             "user": self.embedding_dim,
             "behavior_side": side_output_dim,
         }
+        if self.semantic_encoder is not None and self.semantic_inject == "mbc_slice":
+            self.mbc_slice_dims["semantic_target"] = self.semantic_proj_dim
+        if self.simtier_encoder is not None and self.semantic_inject == "mbc_slice":
+            self.mbc_slice_dims["simtier"] = self.simtier_dim
+        if self.semantic_long_short is not None and self.semantic_inject == "mbc_slice":
+            self.mbc_slice_dims["semantic_interest"] = int(config.get("semantic_long_short_dim", self.semantic_proj_dim))
         if self.use_mbc_slices:
             self.mbc_semantic_head = MBCSemanticHead(
                 slice_dims=self.mbc_slice_dims,
@@ -301,9 +394,7 @@ class ADSTransformerSideModel(ADSModel):
                 requires_grad=bool(config.get("calib_scale_trainable", True)),
             )
         self.semantic_proj = None
-        self.semantic_input_dim = int(feature_maps.get("semantic_dim", 0)) or int(config.get("semantic_proj_input_dim", config.get("semantic_proj_dim", 64)))
-        self.semantic_proj_dim = int(config.get("semantic_proj_dim", 64))
-        if self.use_video_semantic_emb:
+        if self.use_video_semantic_emb and self.semantic_inject != "mbc_slice" and not self.use_semantic_late_fusion:
             self.semantic_proj = nn.Sequential(
                 nn.LayerNorm(self.semantic_input_dim),
                 nn.Linear(self.semantic_input_dim, self.semantic_proj_dim),
@@ -333,6 +424,12 @@ class ADSTransformerSideModel(ADSModel):
             final_in += self.author_prior_emb_dim
         if self.semantic_proj is not None:
             final_in += self.semantic_proj_dim
+        if not self.use_mbc_slices and self.semantic_encoder is not None and self.semantic_inject != "mbc_slice":
+            final_in += self.semantic_proj_dim
+        if not self.use_mbc_slices and self.simtier_encoder is not None and self.semantic_inject != "mbc_slice":
+            final_in += self.simtier_dim
+        if not self.use_mbc_slices and self.semantic_long_short is not None and self.semantic_inject != "mbc_slice":
+            final_in += int(config.get("semantic_long_short_dim", self.semantic_proj_dim))
         if self.semantic_match_proj is not None:
             final_in += self.semantic_match_emb_dim
         self.mlp = nn.Sequential(
@@ -372,6 +469,7 @@ class ADSTransformerSideModel(ADSModel):
         self,
         batch: Dict[str, torch.Tensor],
         final_input: torch.Tensor,
+        semantic_outputs: Dict[str, torch.Tensor] | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor | None, torch.Tensor | None, torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]:
         history_dense_emb = None
         author_match_features = None
@@ -402,6 +500,16 @@ class ADSTransformerSideModel(ADSModel):
                 semantic_match_features = final_input.new_zeros(final_input.size(0), self.semantic_match_input_dim)
             semantic_match_emb = self.semantic_match_proj(semantic_match_features.to(dtype=final_input.dtype))
             final_input = torch.cat([final_input, semantic_match_emb], dim=-1)
+        if not self.use_mbc_slices and self.semantic_inject != "mbc_slice" and semantic_outputs:
+            append_parts = []
+            if "semantic_target" in semantic_outputs:
+                append_parts.append(semantic_outputs["semantic_target"])
+            if "simtier" in semantic_outputs:
+                append_parts.append(semantic_outputs["simtier"])
+            if "semantic_interest" in semantic_outputs:
+                append_parts.append(semantic_outputs["semantic_interest"])
+            if append_parts:
+                final_input = torch.cat([final_input] + append_parts, dim=-1)
         return final_input, history_dense_emb, author_match_features, author_prior_emb, semantic_emb, semantic_match_emb
 
     def _apply_output_heads(self, batch: Dict[str, torch.Tensor], final_input: torch.Tensor, ranking_logit: torch.Tensor) -> Dict[str, torch.Tensor]:
@@ -460,6 +568,7 @@ class ADSTransformerSideModel(ADSModel):
         side_info: torch.Tensor,
         hist_mask: torch.Tensor,
         batch: Dict[str, torch.Tensor],
+        semantic_outputs: Dict[str, torch.Tensor] | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor | None, torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]:
         # MBC slices 将 interest/target/domain/user/behavior_side 汇总为辅助残差预测。
         residual = torch.zeros(interest.size(0), device=interest.device, dtype=interest.dtype)
@@ -480,6 +589,13 @@ class ADSTransformerSideModel(ADSModel):
             "user": user_emb,
             "behavior_side": side_pool,
         }
+        if semantic_outputs:
+            if "semantic_target" in self.mbc_slice_dims and semantic_outputs.get("semantic_target") is not None:
+                feature_slices["semantic_target"] = semantic_outputs["semantic_target"]
+            if "simtier" in self.mbc_slice_dims and semantic_outputs.get("simtier") is not None:
+                feature_slices["simtier"] = semantic_outputs["simtier"]
+            if "semantic_interest" in self.mbc_slice_dims and semantic_outputs.get("semantic_interest") is not None:
+                feature_slices["semantic_interest"] = semantic_outputs["semantic_interest"]
         z_mbc, mbc_logit = self.mbc_semantic_head(feature_slices)
         if self.mbc_dynamic_gate is not None:
             gate_input = torch.cat([feature_slices[name] for name in self.mbc_semantic_head.slice_names], dim=-1)
@@ -489,6 +605,48 @@ class ADSTransformerSideModel(ADSModel):
             mbc_gate = torch.sigmoid(self.mbc_gate_logit)
         residual = mbc_gate * mbc_logit
         return residual, z_mbc, mbc_logit, mbc_gate, author_mbc_delta
+
+    def _apply_semantic_late_fusion(
+        self,
+        interest: torch.Tensor,
+        E_Q: torch.Tensor,
+        E_D: torch.Tensor,
+        user_emb: torch.Tensor,
+        semantic_outputs: Dict[str, torch.Tensor],
+    ) -> tuple[torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
+        residual = torch.zeros(interest.size(0), device=interest.device, dtype=interest.dtype)
+        if (
+            not self.use_semantic_late_fusion
+            or self.semantic_late_fusion_head is None
+            or self.semantic_late_fusion_gate_logit is None
+        ):
+            return residual, None, None
+        parts = [interest, E_Q, user_emb, E_D]
+        if self.semantic_encoder is not None:
+            semantic_target = semantic_outputs.get("semantic_target")
+            if semantic_target is None:
+                semantic_target = interest.new_zeros(interest.size(0), self.semantic_proj_dim)
+            parts.append(semantic_target)
+        if self.simtier_encoder is not None:
+            simtier = semantic_outputs.get("simtier")
+            if simtier is None:
+                simtier = interest.new_zeros(interest.size(0), self.simtier_dim)
+            parts.append(simtier)
+        if self.semantic_long_short is not None:
+            semantic_interest = semantic_outputs.get("semantic_interest")
+            if semantic_interest is None:
+                semantic_interest = interest.new_zeros(
+                    interest.size(0),
+                    int(self.config.get("semantic_long_short_dim", self.semantic_proj_dim)),
+                )
+            parts.append(semantic_interest)
+        semantic_late_fusion_input = torch.cat(parts, dim=-1)
+        semantic_late_fusion_logit = self.semantic_late_fusion_head(semantic_late_fusion_input).squeeze(-1)
+        semantic_late_fusion_gate = torch.sigmoid(self.semantic_late_fusion_gate_logit).to(dtype=semantic_late_fusion_logit.dtype)
+        residual = semantic_late_fusion_gate * semantic_late_fusion_logit
+        semantic_outputs["semantic_late_fusion_gate"] = semantic_late_fusion_gate.expand(interest.size(0))
+        semantic_outputs["semantic_late_fusion_logit"] = semantic_late_fusion_logit
+        return residual, semantic_late_fusion_logit, semantic_late_fusion_gate
 
     def _build_side_info(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # 历史行为侧信息：描述每个历史位置的行为强度、时间间隔、来源 tab 和位置。
@@ -540,6 +698,98 @@ class ADSTransformerSideModel(ADSModel):
         recent_match = same_author[:, -1]
         any_match = (same_author.sum(dim=1) > 0).to(dtype=dtype)
         return torch.stack([match_ratio, recent_match, any_match], dim=-1)
+
+    def _build_semantic_outputs(
+        self,
+        batch: Dict[str, torch.Tensor],
+        hist_mask: torch.Tensor,
+        E_Q: torch.Tensor,
+        E_D: torch.Tensor,
+        dtype: torch.dtype,
+    ) -> Dict[str, torch.Tensor]:
+        outputs: Dict[str, torch.Tensor] = {}
+        target_semantic_repr = None
+        simtier_repr = None
+        if self.semantic_encoder is not None:
+            target_semantic = batch.get("target_semantic_emb")
+            if target_semantic is None:
+                target_semantic = E_Q.new_zeros(E_Q.size(0), self.semantic_input_dim)
+            target_semantic_repr = self.semantic_encoder(target_semantic.to(dtype=dtype))
+            target_semantic_repr = target_semantic_repr * self.semantic_target_scale
+            if self.semantic_target_gate_logit is not None:
+                semantic_target_gate = torch.sigmoid(self.semantic_target_gate_logit).to(dtype=target_semantic_repr.dtype)
+                target_semantic_repr = target_semantic_repr * semantic_target_gate
+                outputs["semantic_target_slice_gate"] = semantic_target_gate.expand(E_Q.size(0))
+            outputs["semantic_target"] = target_semantic_repr
+        if self.simtier_encoder is not None:
+            simtier_features = batch.get("simtier_features")
+            if simtier_features is None:
+                simtier_features = E_Q.new_zeros(E_Q.size(0), self.simtier_input_dim)
+            simtier_repr = self.simtier_encoder(simtier_features.to(dtype=dtype))
+            simtier_repr = simtier_repr * self.simtier_scale
+            if self.simtier_gate_logit is not None:
+                simtier_gate = torch.sigmoid(self.simtier_gate_logit).to(dtype=simtier_repr.dtype)
+                simtier_repr = simtier_repr * simtier_gate
+                outputs["simtier_slice_gate"] = simtier_gate.expand(E_Q.size(0))
+            outputs["simtier"] = simtier_repr
+        if self.semantic_long_short is not None and target_semantic_repr is not None:
+            hist_semantic = batch.get("hist_semantic_emb")
+            if hist_semantic is None:
+                hist_semantic = E_Q.new_zeros(E_Q.size(0), hist_mask.size(1), self.semantic_input_dim)
+            long_short_out = self.semantic_long_short(
+                target_semantic_repr=target_semantic_repr,
+                hist_semantic_emb=hist_semantic.to(dtype=dtype),
+                hist_mask=hist_mask.to(dtype=dtype),
+                simtier_repr=simtier_repr,
+                target_repr=E_Q,
+                domain_repr=E_D,
+            )
+            outputs.update(long_short_out)
+        return outputs
+
+    def _attach_semantic_gate_regularization(self, out: Dict[str, torch.Tensor]) -> None:
+        if not self.use_semantic_gate_regularization:
+            return
+        losses = []
+        if self.semantic_target_gate_logit is not None:
+            gate = torch.sigmoid(self.semantic_target_gate_logit)
+            target = gate.new_tensor(self.semantic_target_gate_reg_target)
+            losses.append((gate - target).pow(2))
+        if self.simtier_gate_logit is not None:
+            gate = torch.sigmoid(self.simtier_gate_logit)
+            target = gate.new_tensor(self.simtier_gate_reg_target)
+            losses.append((gate - target).pow(2))
+        if losses:
+            out["semantic_gate_regularization_loss"] = torch.stack(losses).mean()
+
+    def _attach_semantic_diagnostics(
+        self,
+        out: Dict[str, torch.Tensor],
+        semantic_outputs: Dict[str, torch.Tensor],
+    ) -> None:
+        diagnostics: Dict[str, torch.Tensor] = {}
+        if "semantic_gate" in semantic_outputs:
+            diagnostics["semantic_gate"] = semantic_outputs["semantic_gate"].detach()
+        if "short_history_non_empty" in semantic_outputs:
+            diagnostics["short_history_non_empty"] = semantic_outputs["short_history_non_empty"].detach()
+        if "long_history_non_empty" in semantic_outputs:
+            diagnostics["long_history_non_empty"] = semantic_outputs["long_history_non_empty"].detach()
+        if "short_sem_interest" in semantic_outputs:
+            diagnostics["short_sem_interest_norm"] = semantic_outputs["short_sem_interest"].detach().norm(dim=-1)
+        if "long_sem_interest" in semantic_outputs:
+            diagnostics["long_sem_interest_norm"] = semantic_outputs["long_sem_interest"].detach().norm(dim=-1)
+        if "semantic_target" in semantic_outputs:
+            diagnostics["target_semantic_repr_norm"] = semantic_outputs["semantic_target"].detach().norm(dim=-1)
+        if "semantic_target_slice_gate" in semantic_outputs:
+            diagnostics["semantic_target_slice_gate"] = semantic_outputs["semantic_target_slice_gate"].detach()
+        if "simtier_slice_gate" in semantic_outputs:
+            diagnostics["simtier_slice_gate"] = semantic_outputs["simtier_slice_gate"].detach()
+        if "semantic_late_fusion_gate" in semantic_outputs:
+            diagnostics["semantic_late_fusion_gate"] = semantic_outputs["semantic_late_fusion_gate"].detach()
+        if "semantic_late_fusion_logit" in semantic_outputs:
+            diagnostics["semantic_late_fusion_logit"] = semantic_outputs["semantic_late_fusion_logit"].detach()
+        if diagnostics:
+            out["semantic_diagnostics"] = diagnostics
 
     def _build_side_time_features(self, batch: Dict[str, torch.Tensor], hist_mask: torch.Tensor) -> torch.Tensor:
         # 时间上下文会广播到每个历史位置，用于增强 side bias 的场景感知。
@@ -646,6 +896,7 @@ class ADSTransformerSideModel(ADSModel):
         author_prior_emb: torch.Tensor | None = None,
         semantic_emb: torch.Tensor | None = None,
         semantic_match_emb: torch.Tensor | None = None,
+        semantic_outputs: Dict[str, torch.Tensor] | None = None,
         short_interest: torch.Tensor | None = None,
         long_interest: torch.Tensor | None = None,
         long_short_gate: torch.Tensor | None = None,
@@ -711,6 +962,21 @@ class ADSTransformerSideModel(ADSModel):
             semantic_shape = tuple(semantic_features.shape) if semantic_features is not None else (semantic_emb.size(0), self.semantic_input_dim)
             parts.append(f"target_semantic_emb={semantic_shape}")
             parts.append(f"semantic_emb={tuple(semantic_emb.shape)}")
+        if semantic_outputs:
+            if "semantic_target" in semantic_outputs:
+                parts.append(f"target_semantic_repr={tuple(semantic_outputs['semantic_target'].shape)}")
+            if "simtier" in semantic_outputs:
+                parts.append(f"simtier_repr={tuple(semantic_outputs['simtier'].shape)}")
+            if "short_sem_interest" in semantic_outputs:
+                parts.append(f"short_sem_interest={tuple(semantic_outputs['short_sem_interest'].shape)}")
+            if "long_sem_interest" in semantic_outputs:
+                parts.append(f"long_sem_interest={tuple(semantic_outputs['long_sem_interest'].shape)}")
+            if "semantic_interest" in semantic_outputs:
+                parts.append(f"semantic_interest={tuple(semantic_outputs['semantic_interest'].shape)}")
+            if "semantic_gate" in semantic_outputs:
+                gate = semantic_outputs["semantic_gate"].detach()
+                parts.append(f"semantic_gate mean/std={float(gate.mean().cpu()):.6f}/{float(gate.std(unbiased=False).cpu()):.6f}")
+            parts.append(f"MBC slice keys={list(self.mbc_slice_dims.keys())}")
         if semantic_match_emb is not None:
             semantic_match_features = batch.get("semantic_match_features")
             semantic_match_shape = tuple(semantic_match_features.shape) if semantic_match_features is not None else (semantic_match_emb.size(0), self.semantic_match_input_dim)
@@ -797,14 +1063,20 @@ class ADSTransformerSideModel(ADSModel):
                 E_Q, E_D, user_emb, Q, K, V, hist_mask, interest, score_bias
             )
             interest = self.interest_ffn(interest)  # [B, d_attn]
-            mbc_residual, mbc_vector, mbc_logit, mbc_gate, author_mbc_delta = self._apply_mbc_slices(interest, E_Q, E_D, user_emb, side_info, hist_mask, batch)
+            semantic_outputs = self._build_semantic_outputs(batch, hist_mask, E_Q, E_D, interest.dtype)
+            mbc_residual, mbc_vector, mbc_logit, mbc_gate, author_mbc_delta = self._apply_mbc_slices(interest, E_Q, E_D, user_emb, side_info, hist_mask, batch, semantic_outputs)
             # 最终预测融合兴趣、目标、用户、场景，并可叠加 dense/MBC 残差。
             final_input = torch.cat([interest, E_Q, user_emb, E_D], dim=-1)
             final_input, dense_residual = self._append_dense_features(batch, final_input)
-            final_input, history_dense_emb, author_match_features, author_prior_emb, semantic_emb, semantic_match_emb = self._append_experimental_features(batch, final_input)
-            logit = self.mlp(final_input).squeeze(-1) + dense_residual + mbc_residual  # [B]
+            final_input, history_dense_emb, author_match_features, author_prior_emb, semantic_emb, semantic_match_emb = self._append_experimental_features(batch, final_input, semantic_outputs)
+            semantic_late_residual, _, _ = self._apply_semantic_late_fusion(
+                interest, E_Q, E_D, user_emb, semantic_outputs
+            )
+            logit = self.mlp(final_input).squeeze(-1) + dense_residual + mbc_residual + semantic_late_residual  # [B]
             out = self._apply_output_heads(batch, final_input, logit)
             out["attn"] = alpha
+            self._attach_semantic_diagnostics(out, semantic_outputs)
+            self._attach_semantic_gate_regularization(out)
             self._maybe_log_debug_shapes(
                 batch, E_S, E_D, E_Q, Q, K, V, hist_mask, interest, final_input, out["logit"],
                 score_bias, attn_score, mbc_vector, mbc_logit, mbc_gate,
@@ -820,6 +1092,7 @@ class ADSTransformerSideModel(ADSModel):
                 author_prior_emb=author_prior_emb,
                 semantic_emb=semantic_emb,
                 semantic_match_emb=semantic_match_emb,
+                semantic_outputs=semantic_outputs,
                 short_interest=short_interest,
                 long_interest=long_interest,
                 long_short_gate=long_short_gate,
@@ -900,15 +1173,21 @@ class ADSTransformerSideModel(ADSModel):
         interest = self.interest_ffn(interest)  # [B, d_attn]
 
         # 15/16) final prediction
+        semantic_outputs = self._build_semantic_outputs(batch, hist_mask, E_Q, E_D, interest.dtype)
         mbc_residual, mbc_vector, mbc_logit, mbc_gate, author_mbc_delta = self._apply_mbc_slices(
-            interest, E_Q, E_D, user_emb, side_info, hist_mask, batch
+            interest, E_Q, E_D, user_emb, side_info, hist_mask, batch, semantic_outputs
         )
         final_input = torch.cat([interest, E_Q, user_emb, E_D], dim=-1)
         final_input, dense_residual = self._append_dense_features(batch, final_input)
-        final_input, history_dense_emb, author_match_features, author_prior_emb, semantic_emb, semantic_match_emb = self._append_experimental_features(batch, final_input)
-        logit = self.mlp(final_input).squeeze(-1) + dense_residual + mbc_residual  # [B]
+        final_input, history_dense_emb, author_match_features, author_prior_emb, semantic_emb, semantic_match_emb = self._append_experimental_features(batch, final_input, semantic_outputs)
+        semantic_late_residual, _, _ = self._apply_semantic_late_fusion(
+            interest, E_Q, E_D, user_emb, semantic_outputs
+        )
+        logit = self.mlp(final_input).squeeze(-1) + dense_residual + mbc_residual + semantic_late_residual  # [B]
         out = self._apply_output_heads(batch, final_input, logit)
         out["attn"] = alpha
+        self._attach_semantic_diagnostics(out, semantic_outputs)
+        self._attach_semantic_gate_regularization(out)
         self._maybe_log_debug_shapes(
             batch, E_S, E_D, E_Q, Q, K, V, hist_mask, interest, final_input, out["logit"],
             None, attn_score, mbc_vector, mbc_logit, mbc_gate,
@@ -924,6 +1203,7 @@ class ADSTransformerSideModel(ADSModel):
             author_prior_emb=author_prior_emb,
             semantic_emb=semantic_emb,
             semantic_match_emb=semantic_match_emb,
+            semantic_outputs=semantic_outputs,
             short_interest=short_interest,
             long_interest=long_interest,
             long_short_gate=long_short_gate,

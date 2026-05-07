@@ -68,6 +68,25 @@ python scripts/preprocess.py --config configs/ads.yaml
 - `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_dynamic_mbc_gate.yaml`
 - `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_target.yaml`
 - `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_match.yaml`
+- `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier.yaml`
+- `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_long_short.yaml`
+- `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_long_short.yaml`
+
+## Qwen/LLM 视频语义 embedding 实验
+
+训练和评估阶段不会在线调用 Qwen/API。先离线生成语义文本与 embedding：
+
+```bash
+python scripts/build_video_semantic_text.py --debug
+python scripts/generate_qwen_video_embeddings.py --mock_debug --debug
+```
+
+正式 embedding 文件路径：
+
+- `data/semantic/video_semantic_text.parquet`
+- `data/semantic/video_semantic_emb.parquet`
+
+语义增强实验只通过 MBC slices 注入 `semantic_target`、`simtier`、`semantic_interest`，不直接 residual 到 logit，不新增单独语义 logit head。详细计划见 `docs/semantic_simtier_experiment_plan.md`。
 
 ## 训练 ADS 基线
 

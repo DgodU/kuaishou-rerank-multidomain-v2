@@ -1534,6 +1534,47 @@
       "test_logloss": 0.592326,
       "source_log": "logs/nohup_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_author_pcrg_token_zero_init_bias_full_train.log",
       "conclusion": "拒绝：在 author_pcrg_token 上仅开启 zero_init_side_attention_bias 后，test GAUC=0.655530，显著低于 author_pcrg_token seed-2025 0.660004、单独 author 0.658705、author_zero_init_bias 0.658722 和旧保护候选 0.660225；test LogLoss=0.592326 也弱于 author_pcrg_token 0.591190 和单独 author 0.591782。不 seed 确认、不推广。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_latefusion",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 4,
+      "best_valid_auc": 0.76243,
+      "best_valid_gauc": 0.673508,
+      "best_valid_logloss": 0.575052,
+      "test_auc": 0.7471991086891948,
+      "test_gauc": 0.6608652383110102,
+      "test_logloss": 0.5916800690324254,
+      "source_log": "logs/ads_transformer_side_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_latefusion.log"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_long_short",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 4,
+      "best_valid_auc": 0.761015,
+      "best_valid_gauc": 0.673342,
+      "best_valid_logloss": 0.576493,
+      "test_auc": 0.7460748861004817,
+      "test_gauc": 0.6597654231985007,
+      "test_logloss": 0.59291086193227,
+      "source_log": "logs/ads_transformer_side_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_long_short.log",
+      "conclusion": "不推广：semantic long-short 链路有效但测试 GAUC=0.659765 低于 sem48 seed2025、latefusion 和旧保护候选；LogLoss=0.592911 也弱于 latefusion 与 sem48 seed2025。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_long_short",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 3,
+      "best_valid_auc": 0.760972,
+      "best_valid_gauc": 0.673135,
+      "best_valid_logloss": 0.575097,
+      "test_auc": 0.7456983754370923,
+      "test_gauc": 0.6605791178402769,
+      "test_logloss": 0.5923069177081524,
+      "source_log": "logs/ads_transformer_side_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_long_short.log",
+      "conclusion": "不推广：SimTier + semantic long-short 比 semantic_long_short GAUC/LogLoss 略好，但 test GAUC=0.660579 仍低于 latefusion、sem48 seed2025、mbcgate005 seed2025 和 reg_mid seed2025；LogLoss=0.592307 弱于 latefusion，基本不优于 sem48 seed2025。"
     }
   ],
   "author_single_switch_summary_20260504": {
@@ -1822,5 +1863,46 @@
       "old_protection_candidate_test_gauc": 0.660225
     },
     "conclusion": "zero_init_side_attention_bias badly hurts ranking when added to author_pcrg_token and does not improve LogLoss. Reject; do not seed-confirm."
+  },
+  "semantic_experiment_status": {
+    "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier": {
+      "status": "implemented",
+      "debug_status": "debug_passed",
+      "full_status": "full_pending",
+      "decision": "pending_full",
+      "test_auc": null,
+      "test_gauc": null,
+      "test_logloss": null,
+      "debug_test_auc": 0.6326367606896408,
+      "debug_test_gauc": 0.560384344050025,
+      "debug_test_logloss": 0.6629636852411528,
+      "debug_metrics_file": "outputs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_debug_test_metrics.json"
+    },
+    "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_long_short": {
+      "status": "implemented",
+      "debug_status": "debug_passed",
+      "full_status": "full_pending",
+      "decision": "pending_full",
+      "test_auc": null,
+      "test_gauc": null,
+      "test_logloss": null,
+      "debug_test_auc": 0.6289142307471804,
+      "debug_test_gauc": 0.5698940531131629,
+      "debug_test_logloss": 0.6519285103392481,
+      "debug_metrics_file": "outputs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_long_short_debug_test_metrics.json"
+    },
+    "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_long_short": {
+      "status": "implemented",
+      "debug_status": "debug_passed",
+      "full_status": "full_pending",
+      "decision": "pending_full",
+      "test_auc": null,
+      "test_gauc": null,
+      "test_logloss": null,
+      "debug_test_auc": 0.5945172103998583,
+      "debug_test_gauc": 0.6155163368618453,
+      "debug_test_logloss": 0.6704355037375169,
+      "debug_metrics_file": "outputs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_long_short_debug_test_metrics.json"
+    }
   }
 }

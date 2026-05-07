@@ -2,6 +2,29 @@
 
 本文档记录项目创建以来的主要工程改动、实验结果和阶段性结论。实验名、配置路径和指标字段保留英文，便于脚本和日志检索。
 
+## 2026-05-06 - Qwen/LLM 视频语义 SimTier/long-short 实验实现
+
+### 新增内容
+
+- 新增 `src/data/semantic_loader.py`，支持离线 `video_semantic_emb.parquet` 的 list/string/emb_0 多列格式读取、NaN/Inf 清理、L2 normalize 和 unknown zero padding。
+- 新增 `scripts/build_video_semantic_text.py`，只生成视频语义文本，不调用 API。
+- 新增 `scripts/generate_qwen_video_embeddings.py`，用于离线 Qwen embedding 生成，并支持 `--mock_debug` deterministic embedding。
+- 新增 `src/models/semantic_features.py`，实现 `VideoSemanticEncoder`、`SimTierEncoder`、`SemanticLongShortInterest`。
+- `scripts/preprocess.py` 支持 `use_video_semantic_emb`、`use_simtier_features`、`use_semantic_long_short`，输出 semantic matrix/index、SimTier features、feature names 和 scaler。
+- `src/data/dataset.py` 支持从 semantic index 动态查 `target_semantic_emb` 与 `hist_semantic_emb`。
+- `ADSTransformerSideModel` 支持 MBC slices 注入 `semantic_target`、`simtier`、`semantic_interest`，不新增语义 residual logit head。
+- 新增三套配置：
+  - `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier`
+  - `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_long_short`
+  - `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_long_short`
+
+### 状态
+
+- 实现状态：implemented，三套语义 config 已完成 mock embedding debug。
+- Debug 状态：`semantic_simtier` / `semantic_long_short` / `semantic_simtier_long_short` 均已通过 preprocess debug 与 train debug。
+- Full run：未启动，保持 pending。
+- 当前保护模型配置未修改；三套语义实验使用独立 processed 目录，避免覆盖保护模型数据。
+
 ## 2026-05-03 - 代码级扩展验收与预处理鲁棒性修复
 
 ### 验收范围

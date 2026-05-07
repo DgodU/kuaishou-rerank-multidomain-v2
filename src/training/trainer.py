@@ -128,6 +128,11 @@ class CTRTrainer:
             total_loss = total_loss + float(self.config.get("mbc_diversity_loss_weight", 1e-4)) * diversity_loss
         if bool(self.config.get("use_pairwise_loss", False)):
             total_loss = total_loss + float(self.config.get("pairwise_loss_weight", 0.1)) * pairwise_loss
+        semantic_gate_regularization_loss = out.get("semantic_gate_regularization_loss")
+        if semantic_gate_regularization_loss is None:
+            semantic_gate_regularization_loss = torch.zeros((), device=label.device)
+        if bool(self.config.get("use_semantic_gate_regularization", False)):
+            total_loss = total_loss + float(self.config.get("semantic_gate_regularization_weight", 1e-3)) * semantic_gate_regularization_loss
 
         return {
             "total_loss": total_loss,
@@ -135,6 +140,7 @@ class CTRTrainer:
             "pairwise_loss": pairwise_loss,
             "aux_loss": aux_loss,
             "diversity_loss": diversity_loss,
+            "semantic_gate_regularization_loss": semantic_gate_regularization_loss,
         }
 
     def _compute_pairwise_loss(
@@ -206,6 +212,7 @@ class CTRTrainer:
         pairwise_losses = []
         aux_losses = []
         diversity_losses = []
+        semantic_gate_regularization_losses = []
         aux_rank_losses = []
         random_aux_losses = []
         random_aux_steps = 0
@@ -254,6 +261,7 @@ class CTRTrainer:
             pairwise_losses.append(loss_dict["pairwise_loss"].detach().item())
             aux_losses.append(loss_dict["aux_loss"].detach().item())
             diversity_losses.append(loss_dict["diversity_loss"].detach().item())
+            semantic_gate_regularization_losses.append(loss_dict["semantic_gate_regularization_loss"].detach().item())
 
             if aux_rank_iter is not None and step_idx % aux_rank_every_n_steps == 0:
                 try:
@@ -286,6 +294,7 @@ class CTRTrainer:
                 "train_aux_rank_loss": 0.0,
                 "train_aux_loss": 0.0,
                 "train_diversity_loss": 0.0,
+                "train_semantic_gate_regularization_loss": 0.0,
                 "train_random_aux_loss": 0.0,
                 "random_aux_steps_per_epoch": 0.0,
                 "random_aux_batch_count": float(len(random_aux_loader)) if random_aux_loader is not None else 0.0,
@@ -297,6 +306,7 @@ class CTRTrainer:
             "train_aux_rank_loss": float(np.mean(aux_rank_losses)) if aux_rank_losses else 0.0,
             "train_aux_loss": float(np.mean(aux_losses)),
             "train_diversity_loss": float(np.mean(diversity_losses)),
+            "train_semantic_gate_regularization_loss": float(np.mean(semantic_gate_regularization_losses)),
             "train_random_aux_loss": float(np.mean(random_aux_losses)) if random_aux_losses else 0.0,
             "random_aux_steps_per_epoch": float(random_aux_steps),
             "random_aux_batch_count": float(len(random_aux_loader)) if random_aux_loader is not None else 0.0,
@@ -309,6 +319,7 @@ class CTRTrainer:
         y_true_all = []
         pred_all: Dict[str, list[np.ndarray]] = {"": []}
         user_ids_all = []
+        semantic_diag_all: Dict[str, list[np.ndarray]] = {}
 
         for batch in loader:
             batch = self._move_batch(batch)
@@ -324,6 +335,9 @@ class CTRTrainer:
             ]:
                 if key in out:
                     pred_all.setdefault(prefix, []).append(torch.sigmoid(out[key]).detach().cpu().numpy())
+            semantic_diagnostics = out.get("semantic_diagnostics", {}) or {}
+            for key, value in semantic_diagnostics.items():
+                semantic_diag_all.setdefault(key, []).append(value.detach().cpu().numpy())
             user_ids_all.append(batch["user_id"].detach().cpu().numpy())
 
         if not y_true_all:
@@ -342,6 +356,11 @@ class CTRTrainer:
                 metrics[f"{prefix}_auc"] = m["auc"]
                 metrics[f"{prefix}_gauc"] = m["gauc"]
                 metrics[f"{prefix}_logloss"] = m["logloss"]
+        for key, values in semantic_diag_all.items():
+            if values:
+                arr = np.concatenate(values)
+                metrics[f"{key}_mean"] = float(np.mean(arr))
+                metrics[f"{key}_std"] = float(np.std(arr))
         return metrics
 
     @torch.no_grad()
@@ -389,7 +408,7 @@ class CTRTrainer:
             current_best_metric = float(valid_metrics.get(best_metric_name, valid_metrics["gauc"]))
 
             self.logger.info(
-                "Epoch %d | train_total_loss=%.6f | train_main_loss=%.6f | train_pairwise_loss=%.6f | train_aux_rank_loss=%.6f | train_random_aux_loss=%.6f | random_aux_steps_per_epoch=%.0f | train_aux_loss=%.6f | train_diversity_loss=%.6f | valid_auc=%.6f | valid_gauc=%.6f | valid_logloss=%.6f | best_metric_name=%s | best_metric=%.6f | extra_valid_metrics=%s",
+                "Epoch %d | train_total_loss=%.6f | train_main_loss=%.6f | train_pairwise_loss=%.6f | train_aux_rank_loss=%.6f | train_random_aux_loss=%.6f | random_aux_steps_per_epoch=%.0f | train_aux_loss=%.6f | train_diversity_loss=%.6f | train_semantic_gate_regularization_loss=%.6f | valid_auc=%.6f | valid_gauc=%.6f | valid_logloss=%.6f | best_metric_name=%s | best_metric=%.6f | extra_valid_metrics=%s",
                 epoch,
                 train_stats["train_total_loss"],
                 train_stats["train_main_loss"],
@@ -399,6 +418,7 @@ class CTRTrainer:
                 train_stats["random_aux_steps_per_epoch"],
                 train_stats["train_aux_loss"],
                 train_stats["train_diversity_loss"],
+                train_stats["train_semantic_gate_regularization_loss"],
                 valid_metrics["auc"],
                 valid_metrics["gauc"],
                 valid_metrics["logloss"],

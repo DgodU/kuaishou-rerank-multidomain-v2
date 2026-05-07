@@ -22,6 +22,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.data.semantic_loader import load_video_semantic_embeddings
 from src.utils.io import ensure_dir, load_yaml, save_dataframe, save_json, save_pickle
 
 
@@ -441,6 +442,261 @@ def summarize_hist_lengths(df: pd.DataFrame) -> Dict[str, float | int]:
     }
 
 
+SIMTIER_FEATURE_NAMES = [
+    "simtier_count_0",
+    "simtier_count_1",
+    "simtier_count_2",
+    "simtier_count_3",
+    "simtier_count_4",
+    "simtier_ratio_0",
+    "simtier_ratio_1",
+    "simtier_ratio_2",
+    "simtier_ratio_3",
+    "simtier_ratio_4",
+    "simtier_click_weighted_ratio_0",
+    "simtier_click_weighted_ratio_1",
+    "simtier_click_weighted_ratio_2",
+    "simtier_click_weighted_ratio_3",
+    "simtier_click_weighted_ratio_4",
+    "simtier_long_view_weighted_ratio_0",
+    "simtier_long_view_weighted_ratio_1",
+    "simtier_long_view_weighted_ratio_2",
+    "simtier_long_view_weighted_ratio_3",
+    "simtier_long_view_weighted_ratio_4",
+    "sim_mean_all",
+    "sim_max_all",
+    "sim_min_all",
+    "sim_std_all",
+    "sim_top1",
+    "sim_top3_mean",
+    "sim_top5_mean",
+    "sim_top10_mean",
+    "recent5_sim_mean",
+    "recent5_sim_max",
+    "recent5_sim_top3_mean",
+    "recent10_sim_mean",
+    "recent10_sim_max",
+    "recent10_sim_top3_mean",
+    "recent20_sim_mean",
+    "recent20_sim_max",
+    "long_view_sim_mean",
+    "long_view_sim_max",
+    "high_play_ratio_sim_mean",
+    "high_play_ratio_sim_max",
+    "same_cat_l1_sim_mean",
+    "same_cat_l1_sim_max",
+    "same_cat_l2_sim_mean",
+    "same_cat_l2_sim_max",
+    "same_cat_l3_sim_mean",
+    "same_author_sim_mean",
+    "same_author_sim_max",
+    "same_author_hist_ratio",
+    "sim_short_mean_minus_long_mean",
+    "sim_short_max_minus_long_max",
+    "sim_short_over_long_mean_ratio",
+]
+
+
+def _safe_stat(values: np.ndarray, mode: str) -> float:
+    if values.size == 0:
+        return 0.0
+    if mode == "mean":
+        return float(np.mean(values))
+    if mode == "max":
+        return float(np.max(values))
+    if mode == "min":
+        return float(np.min(values))
+    if mode == "std":
+        return float(np.std(values))
+    raise ValueError(mode)
+
+
+def _topk_mean(values: np.ndarray, k: int) -> float:
+    if values.size == 0:
+        return 0.0
+    return float(np.mean(np.sort(values)[-min(k, values.size):]))
+
+
+def build_simtier_values(
+    row: Dict[str, Any],
+    semantic_matrix: np.ndarray,
+    high_play_ratio_bucket_threshold: int = 7,
+    history_order: str = "old_to_new",
+) -> list[float]:
+    target_idx = int(row.get("target_semantic_idx", 0))
+    hist_idx = np.asarray(row.get("hist_semantic_idx_seq", []), dtype=np.int64)
+    hist_mask = np.asarray(row.get("hist_mask", []), dtype=np.float32) > 0
+    if target_idx <= 0 or hist_idx.size == 0 or not hist_mask.any():
+        return [0.0] * len(SIMTIER_FEATURE_NAMES)
+    target = semantic_matrix[target_idx]
+    hist_valid = hist_idx[hist_mask]
+    valid_idx_mask = hist_valid > 0
+    if not valid_idx_mask.any() or float(np.linalg.norm(target)) <= 0.0:
+        return [0.0] * len(SIMTIER_FEATURE_NAMES)
+    valid_positions = np.where(hist_mask)[0][valid_idx_mask]
+    hist_emb = semantic_matrix[hist_valid[valid_idx_mask]]
+    emb_nonzero = np.linalg.norm(hist_emb, axis=1) > 0
+    if not emb_nonzero.any():
+        return [0.0] * len(SIMTIER_FEATURE_NAMES)
+    valid_positions = valid_positions[emb_nonzero]
+    hist_emb = hist_emb[emb_nonzero]
+    sim01 = np.clip((hist_emb @ target + 1.0) / 2.0, 0.0, 1.0).astype(np.float32)
+    n = max(int(sim01.size), 1)
+    tiers = np.minimum(np.floor(sim01 * 5.0).astype(np.int64), 4)
+    counts = np.asarray([(tiers == i).sum() for i in range(5)], dtype=np.float32)
+    ratios = counts / float(n)
+
+    actions = np.asarray(row.get("hist_action_vector", []), dtype=np.float32)
+    if actions.ndim == 2 and actions.shape[0] > int(valid_positions.max(initial=0)):
+        click_w = actions[valid_positions, 0]
+        long_w = actions[valid_positions, 6] if actions.shape[1] > 6 else np.zeros_like(click_w)
+    else:
+        click_w = np.ones_like(sim01)
+        long_w = np.zeros_like(sim01)
+    click_den = float(click_w.sum()) if float(click_w.sum()) > 0 else float(n)
+    long_den = float(long_w.sum()) if float(long_w.sum()) > 0 else float(n)
+    click_ratios = np.asarray([float(click_w[tiers == i].sum()) / click_den for i in range(5)], dtype=np.float32)
+    long_ratios = np.asarray([float(long_w[tiers == i].sum()) / long_den for i in range(5)], dtype=np.float32)
+
+    if history_order == "new_to_old":
+        order_rank = np.argsort(valid_positions)
+        recent_positions = valid_positions[order_rank]
+        recent_sims = sim01[order_rank]
+    else:
+        order_rank = np.argsort(valid_positions)
+        recent_positions = valid_positions[order_rank]
+        recent_sims = sim01[order_rank]
+
+    def recent(k: int) -> np.ndarray:
+        return recent_sims[:k] if history_order == "new_to_old" else recent_sims[-k:]
+
+    play_bucket = np.asarray(row.get("hist_play_ratio_bucket", []), dtype=np.int64)
+    high_play = play_bucket[valid_positions] >= int(high_play_ratio_bucket_threshold) if play_bucket.size else np.zeros_like(sim01, dtype=bool)
+    long_mask = long_w > 0
+    hist_l1 = np.asarray(row.get("hist_category_l1", []), dtype=np.int64)
+    hist_l2 = np.asarray(row.get("hist_category_l2", []), dtype=np.int64)
+    hist_l3 = np.asarray(row.get("hist_category_l3", []), dtype=np.int64)
+    hist_author = np.asarray(row.get("hist_author_id", []), dtype=np.int64)
+
+    same_l1 = hist_l1[valid_positions] == int(row.get("target_category_l1", 0)) if hist_l1.size else np.zeros_like(sim01, dtype=bool)
+    same_l2 = hist_l2[valid_positions] == int(row.get("target_category_l2", 0)) if hist_l2.size else np.zeros_like(sim01, dtype=bool)
+    same_l3 = hist_l3[valid_positions] == int(row.get("target_category_l3", 0)) if hist_l3.size else np.zeros_like(sim01, dtype=bool)
+    target_author = int(row.get("target_author_id", 0))
+    same_author = (hist_author[valid_positions] == target_author) & (target_author > 0) if hist_author.size else np.zeros_like(sim01, dtype=bool)
+
+    short = recent(10)
+    long = sim01
+    short_mean = _safe_stat(short, "mean")
+    long_mean = _safe_stat(long, "mean")
+    values = []
+    values.extend(counts.tolist())
+    values.extend(ratios.tolist())
+    values.extend(click_ratios.tolist())
+    values.extend(long_ratios.tolist())
+    values.extend([
+        _safe_stat(sim01, "mean"),
+        _safe_stat(sim01, "max"),
+        _safe_stat(sim01, "min"),
+        _safe_stat(sim01, "std"),
+        _topk_mean(sim01, 1),
+        _topk_mean(sim01, 3),
+        _topk_mean(sim01, 5),
+        _topk_mean(sim01, 10),
+        _safe_stat(recent(5), "mean"),
+        _safe_stat(recent(5), "max"),
+        _topk_mean(recent(5), 3),
+        _safe_stat(recent(10), "mean"),
+        _safe_stat(recent(10), "max"),
+        _topk_mean(recent(10), 3),
+        _safe_stat(recent(20), "mean"),
+        _safe_stat(recent(20), "max"),
+        _safe_stat(sim01[long_mask], "mean"),
+        _safe_stat(sim01[long_mask], "max"),
+        _safe_stat(sim01[high_play], "mean"),
+        _safe_stat(sim01[high_play], "max"),
+        _safe_stat(sim01[same_l1], "mean"),
+        _safe_stat(sim01[same_l1], "max"),
+        _safe_stat(sim01[same_l2], "mean"),
+        _safe_stat(sim01[same_l2], "max"),
+        _safe_stat(sim01[same_l3], "mean"),
+        _safe_stat(sim01[same_author], "mean"),
+        _safe_stat(sim01[same_author], "max"),
+        float(same_author.sum()) / float(n),
+        short_mean - long_mean,
+        _safe_stat(short, "max") - _safe_stat(long, "max"),
+        float(np.clip(short_mean / (long_mean + 1e-6), 0.0, 10.0)),
+    ])
+    return np.nan_to_num(np.asarray(values, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0).tolist()
+
+
+def add_semantic_indices(
+    df: pd.DataFrame,
+    video_id_to_index: Dict[int, int],
+    video_sparse_map: Dict[Any, int],
+) -> pd.DataFrame:
+    sparse_to_semantic = {
+        int(sparse_id): int(video_id_to_index.get(int(raw_id), 0))
+        for raw_id, sparse_id in video_sparse_map.items()
+        if str(raw_id).isdigit()
+    }
+    df["target_semantic_idx"] = pd.to_numeric(df["video_id_raw"], errors="coerce").fillna(0).astype(np.int64).map(video_id_to_index).fillna(0).astype(np.int64)
+    df["semantic_missing_flag"] = (df["target_semantic_idx"] == 0).astype(np.float32)
+    df["hist_semantic_idx_seq"] = [
+        [int(sparse_to_semantic.get(int(x), 0)) for x in np.asarray(seq, dtype=np.int64).tolist()]
+        for seq in df["hist_video_id"].to_numpy()
+    ]
+    return df
+
+
+def add_simtier_features(
+    df_model: pd.DataFrame,
+    semantic_matrix: np.ndarray,
+    splits: Dict[str, pd.DataFrame],
+    processed_dir: Path,
+    config: Dict[str, Any],
+) -> tuple[Dict[str, pd.DataFrame], list[str], Dict[str, Any]]:
+    for name, frame in splits.items():
+        if len(frame) == 0:
+            for col in SIMTIER_FEATURE_NAMES:
+                frame[col] = np.float32(0.0)
+            continue
+        values = [
+            build_simtier_values(
+                row,
+                semantic_matrix=semantic_matrix,
+                high_play_ratio_bucket_threshold=int(config.get("high_play_ratio_bucket_threshold", 7)),
+                history_order=str(config.get("history_order", "old_to_new")),
+            )
+            for row in tqdm(frame.to_dict("records"), desc=f"Building SimTier {name}")
+        ]
+        arr = np.asarray(values, dtype=np.float32)
+        for i, col in enumerate(SIMTIER_FEATURE_NAMES):
+            frame[col] = arr[:, i]
+    train_arr = splits["train"][SIMTIER_FEATURE_NAMES].to_numpy(dtype=np.float32) if len(splits["train"]) else np.zeros((1, len(SIMTIER_FEATURE_NAMES)), dtype=np.float32)
+    mean = np.nanmean(train_arr, axis=0).astype(np.float32)
+    std = np.nanstd(train_arr, axis=0).astype(np.float32)
+    std = np.where(std < 1e-6, 1.0, std).astype(np.float32)
+    p99 = np.nanquantile(np.maximum(train_arr, 0.0), 0.99, axis=0).astype(np.float32)
+    for frame in splits.values():
+        if len(frame) == 0:
+            continue
+        arr = frame[SIMTIER_FEATURE_NAMES].to_numpy(dtype=np.float32)
+        arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
+        arr = np.minimum(arr, p99.reshape(1, -1))
+        arr = (arr - mean.reshape(1, -1)) / std.reshape(1, -1)
+        arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+        for i, col in enumerate(SIMTIER_FEATURE_NAMES):
+            frame[col] = arr[:, i]
+    scaler = {"feature_names": SIMTIER_FEATURE_NAMES, "mean": mean, "std": std, "p99": p99}
+    save_pickle(scaler, processed_dir / "simtier_scaler.pkl")
+    save_json({"feature_names": SIMTIER_FEATURE_NAMES}, processed_dir / "simtier_feature_names.json")
+    diagnostics = {
+        "simtier_feature_dim": len(SIMTIER_FEATURE_NAMES),
+        "simtier_nan_count": int(sum(np.isnan(frame[SIMTIER_FEATURE_NAMES].to_numpy(dtype=np.float32)).sum() for frame in splits.values() if len(frame))),
+    }
+    return splits, SIMTIER_FEATURE_NAMES, diagnostics
+
+
 def build_histories(
     df: pd.DataFrame,
     max_seq_len: int,
@@ -591,6 +847,8 @@ def main() -> None:
     use_author_features = bool(config.get("use_author_features", False))
     use_author_prior = bool(config.get("use_author_prior", False))
     use_video_semantic_emb = bool(config.get("use_video_semantic_emb", False))
+    use_simtier_features = bool(config.get("use_simtier_features", False))
+    use_semantic_long_short = bool(config.get("use_semantic_long_short", False))
     use_semantic_match_features = bool(config.get("use_semantic_match_features", False))
     split_protocol = str(config.get("split_protocol", "original"))
     if use_dense_history_only:
@@ -602,6 +860,27 @@ def main() -> None:
 
     data_raw_dir = PROJECT_ROOT / "data" / "raw"
     processed_dir = ensure_dir(PROJECT_ROOT / config.get("processed_dir", config.get("data_dir", "data/processed")))
+    semantic_bundle = None
+    semantic_matrix = np.zeros((1, int(config.get("semantic_proj_input_dim", config.get("semantic_proj_dim", 64)))), dtype=np.float32)
+    semantic_loader_message = ""
+    if use_video_semantic_emb:
+        semantic_path = PROJECT_ROOT / str(config.get("semantic_emb_path", "data/semantic/video_semantic_emb.parquet"))
+        if semantic_path.exists() or semantic_path.with_suffix(".pkl").exists():
+            semantic_bundle = load_video_semantic_embeddings(semantic_path)
+            semantic_matrix = semantic_bundle.semantic_matrix
+            np.save(processed_dir / "semantic_emb_matrix.npy", semantic_matrix)
+            save_pickle(semantic_bundle.video_id_to_index, processed_dir / "semantic_video_id_map.pkl")
+        elif args.debug:
+            semantic_loader_message = "semantic embedding file not found, semantic features disabled in debug."
+            print(semantic_loader_message)
+            use_video_semantic_emb = False
+            use_simtier_features = False
+            use_semantic_long_short = False
+        else:
+            raise FileNotFoundError(
+                f"semantic embedding file not found: {semantic_path}. "
+                "Please generate data/semantic/video_semantic_emb.parquet before full semantic preprocessing."
+            )
 
     log1_path = resolve_raw_file(data_raw_dir, "log_standard_4_08_to_4_21_pure.csv")
     log2_path = resolve_raw_file(data_raw_dir, "log_standard_4_22_to_5_08_pure.csv")
@@ -884,6 +1163,8 @@ def main() -> None:
         use_dense_features=build_history_dense,
         history_mode=history_mode,
     )
+    if use_video_semantic_emb and semantic_bundle is not None:
+        df = add_semantic_indices(df, semantic_bundle.video_id_to_index, sparse_maps["video_id"])
 
     model_cols = [
         "user_id",
@@ -930,11 +1211,8 @@ def main() -> None:
         model_cols.extend(author_prior_cols)
     semantic_cols = []
     if use_video_semantic_emb:
-        for i in range(int(config.get("semantic_proj_input_dim", 64))):
-            col = f"target_semantic_emb_{i}"
-            df[col] = 0.0
-            semantic_cols.append(col)
-            model_cols.append(col)
+        semantic_cols = ["target_semantic_idx", "hist_semantic_idx_seq", "semantic_missing_flag"]
+        model_cols.extend(semantic_cols)
     semantic_match_cols = []
     if use_semantic_match_features:
         for i in range(int(config.get("semantic_match_feature_dim", 8))):
@@ -945,6 +1223,16 @@ def main() -> None:
     df_model = df[model_cols].copy()
 
     splits = split_frames(df_model, split_protocol)
+    simtier_cols = []
+    simtier_diagnostics = {"simtier_feature_dim": 0, "simtier_nan_count": 0}
+    if use_video_semantic_emb and use_simtier_features:
+        splits, simtier_cols, simtier_diagnostics = add_simtier_features(
+            df_model=df_model,
+            semantic_matrix=semantic_matrix,
+            splits=splits,
+            processed_dir=processed_dir,
+            config=config,
+        )
     full_train_df = splits["train"]
     full_valid_df = splits["valid"]
     full_test_df = splits["test"]
@@ -989,9 +1277,13 @@ def main() -> None:
         "calibration_dense_cols": dense_cols,
         "calibration_dense_dim": len(dense_cols),
         "semantic_cols": semantic_cols,
-        "semantic_dim": len(semantic_cols),
+        "semantic_dim": int(semantic_matrix.shape[1]) if use_video_semantic_emb else 0,
+        "semantic_index_cols": semantic_cols,
+        "semantic_matrix_path": str(processed_dir / "semantic_emb_matrix.npy") if use_video_semantic_emb else "",
         "semantic_match_cols": semantic_match_cols,
         "semantic_match_dim": len(semantic_match_cols),
+        "simtier_cols": simtier_cols,
+        "simtier_dim": len(simtier_cols),
         "history_mode": history_mode,
         "split_protocol": split_protocol,
     }
@@ -1023,6 +1315,11 @@ def main() -> None:
         "use_history_dense_features": use_history_dense_features,
         "use_author_features": use_author_features,
         "use_author_prior": use_author_prior,
+        "use_video_semantic_emb": use_video_semantic_emb,
+        "use_simtier_features": use_simtier_features,
+        "use_semantic_long_short": use_semantic_long_short,
+        "semantic_loader_message": semantic_loader_message,
+        "semantic_emb_matrix_shape": list(semantic_matrix.shape) if use_video_semantic_emb else [1, int(semantic_matrix.shape[1])],
         "author_source_col": author_source_col,
         "position_summary": position_summary,
         "dense_dim": len(dense_cols),
@@ -1031,10 +1328,13 @@ def main() -> None:
         "history_dense_cols": history_dense_cols,
         "author_prior_dim": len(author_prior_cols),
         "author_prior_cols": author_prior_cols,
-        "semantic_dim": len(semantic_cols),
+        "semantic_dim": int(semantic_matrix.shape[1]) if use_video_semantic_emb else 0,
         "semantic_cols": semantic_cols,
         "semantic_match_dim": len(semantic_match_cols),
         "semantic_match_cols": semantic_match_cols,
+        "simtier_dim": len(simtier_cols),
+        "simtier_cols": simtier_cols,
+        "simtier_diagnostics": simtier_diagnostics,
         "dense_feature_names": dense_cols + history_dense_cols + author_prior_cols,
         "split_stats": split_stats,
         "hist_len_stats": {"train": split_stats["train"], "valid": split_stats["valid"], "test": split_stats["test"]},

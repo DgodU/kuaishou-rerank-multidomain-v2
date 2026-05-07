@@ -95,14 +95,23 @@ def main() -> None:
         config.get("use_history_dense_features", False),
         config.get("seed", 2025),
     )
+    logger.info(
+        "Semantic config | use_video_semantic_emb=%s | use_simtier_features=%s | use_semantic_long_short=%s | semantic_inject=%s | semantic_emb_path=%s",
+        config.get("use_video_semantic_emb", False),
+        config.get("use_simtier_features", False),
+        config.get("use_semantic_long_short", False),
+        config.get("semantic_inject", ""),
+        config.get("semantic_emb_path", ""),
+    )
 
     train_file = data_dir / ("train_debug.parquet" if args.debug else "train.parquet")
     valid_file = data_dir / ("valid_debug.parquet" if args.debug else "valid.parquet")
     test_file = data_dir / ("test_debug.parquet" if args.debug else "test.parquet")
 
+    feature_maps = load_pickle(data_dir / "feature_maps.pkl")
     logger.info("Loading datasets: %s | %s", train_file, valid_file)
-    train_ds = KuaiRandDataset(train_file)
-    valid_ds = KuaiRandDataset(valid_file)
+    train_ds = KuaiRandDataset(train_file, config=config, feature_maps=feature_maps)
+    valid_ds = KuaiRandDataset(valid_file, config=config, feature_maps=feature_maps)
     logger.info("Loaded train/valid dataset sizes: %d / %d", len(train_ds), len(valid_ds))
 
     num_workers = int(config.get("num_workers", 4))
@@ -224,7 +233,6 @@ def main() -> None:
         shuffle=False,
         **common_loader_kwargs,
     )
-    feature_maps = load_pickle(data_dir / "feature_maps.pkl")
     model = build_model(config, feature_maps)
     n_params = count_parameters(model)
     logger.info("Model parameter count | total=%d | trainable=%d", n_params["total"], n_params["trainable"])
@@ -238,6 +246,15 @@ def main() -> None:
 
     first_batch = next(iter(train_loader))
     log_batch_shape_summary(logger, first_batch)
+    if bool(config.get("use_video_semantic_emb", False)):
+        logger.info(
+            "Semantic batch diagnostics | target_semantic_emb shape=%s | hist_semantic_emb shape=%s | simtier_features shape=%s | semantic_missing_rate=%.6f | simtier_nan_count=%d",
+            tuple(first_batch["target_semantic_emb"].shape) if "target_semantic_emb" in first_batch else None,
+            tuple(first_batch["hist_semantic_emb"].shape) if "hist_semantic_emb" in first_batch else None,
+            tuple(first_batch["simtier_features"].shape) if "simtier_features" in first_batch else None,
+            float(first_batch.get("semantic_missing_flag", torch.zeros(1)).float().mean().item()),
+            int(torch.isnan(first_batch.get("simtier_features", torch.zeros(1))).sum().item()),
+        )
 
     criterion = torch.nn.BCEWithLogitsLoss()
     optimizer = torch.optim.AdamW(
@@ -265,7 +282,7 @@ def main() -> None:
     model.load_state_dict(state["model_state_dict"])
 
     logger.info("Loading test dataset: %s", test_file)
-    test_ds = KuaiRandDataset(test_file)
+    test_ds = KuaiRandDataset(test_file, config=config, feature_maps=feature_maps)
     logger.info("Loaded test dataset size: %d", len(test_ds))
     test_loader = DataLoader(
         test_ds,
@@ -291,6 +308,20 @@ def main() -> None:
         "best_checkpoint": str(best_ckpt_path),
         "test_metrics": test_metrics,
     }
+    if bool(config.get("use_video_semantic_emb", False)):
+        diagnostics = {
+            "semantic_missing_rate": float(first_batch.get("semantic_missing_flag", torch.zeros(1)).float().mean().item()),
+            "simtier_nan_count": int(torch.isnan(first_batch.get("simtier_features", torch.zeros(1))).sum().item()),
+            "simtier_feature_dim": int(feature_maps.get("simtier_dim", 0)),
+            "semantic_gate_mean": float(test_metrics.get("semantic_gate_mean", 0.0)),
+            "semantic_gate_std": float(test_metrics.get("semantic_gate_std", 0.0)),
+            "short_history_non_empty_ratio": float(test_metrics.get("short_history_non_empty_mean", 0.0)),
+            "long_history_non_empty_ratio": float(test_metrics.get("long_history_non_empty_mean", 0.0)),
+            "short_sem_interest_norm_mean": float(test_metrics.get("short_sem_interest_norm_mean", 0.0)),
+            "long_sem_interest_norm_mean": float(test_metrics.get("long_sem_interest_norm_mean", 0.0)),
+            "target_semantic_repr_norm_mean": float(test_metrics.get("target_semantic_repr_norm_mean", 0.0)),
+        }
+        save_json(diagnostics, out_dir / f"{experiment_name}_diagnostics.json")
     output_run_name = f"{run_name}_debug" if args.debug and run_name else run_name
     if not run_name:
         save_json(result, out_dir / "test_metrics.json")
