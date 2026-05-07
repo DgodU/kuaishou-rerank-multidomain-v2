@@ -92,3 +92,13 @@ author+pcrg_token 降维尝试（seed2025）：`sidebias_dinatt_click_only_video
 author prior 实现尝试（seed2025）：在 author 特征基础上新增 train-only author CTR/count 先验并拼接 16 维投影，best_epoch=5，验证 GAUC=0.675240，但测试 GAUC=0.656625，低于单独 author、author+pcrg_token 和 MBC seed-2026 确认值；不推广。
 
 稳定性确认队列（seed2025-2028）：`gate008` Test GAUC values=[0.659784, 0.658206, 0.656504, 0.655682]，mean/stdev=0.657544/0.001826，低于 protected mean 0.657891；`no_psrg_no_pcrg` values=[0.659488, 0.659494, 0.657936, 0.654995]，mean/stdev=0.657978/0.002120，与 protected 0.657891/0.002299 基本持平但未超过噪声，且平均 LogLoss 更差。因此 gate008 和 no_psrg_no_pcrg 均不推广，保留当前 protected。
+
+## 语义增强与 semantic long-short 补充结果
+
+| 实验名 | 最佳验证轮次 | 验证AUC | 验证GAUC | 验证LogLoss | 测试AUC | 测试GAUC | 测试LogLoss | 结论 |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_latefusion` | 4 | 0.762430 | 0.673508 | 0.575052 | 0.747199 | 0.660865 | 0.591680 | 新架构未达标 |
+| `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_long_short` | 4 | 0.761015 | 0.673342 | 0.576493 | 0.746075 | 0.659765 | 0.592911 | 不推广 |
+| `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_long_short` | 3 | 0.760972 | 0.673135 | 0.575097 | 0.745698 | 0.660579 | 0.592307 | 不推广 |
+
+`semantic_simtier_long_short` 相比 `semantic_long_short` 的 test GAUC 从 0.659765 提升到 0.660579，LogLoss 从 0.592911 改善到 0.592307，但仍低于 `latefusion` test GAUC 0.660865、`sem48` seed2025 test GAUC 0.662346、`mbcgate005` seed2025 test GAUC 0.662555 和 `reg_mid` seed2025 test GAUC 0.662360。当前语义增强、semantic long-short 与 late fusion 尝试均未达到推广标准。

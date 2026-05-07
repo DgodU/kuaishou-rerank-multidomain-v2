@@ -4,6 +4,13 @@
 
 ## 2026-05-06 - Qwen/LLM 视频语义 SimTier/long-short 实验实现
 
+### Full 结果更新
+
+- `semantic_long_short` full 完成：best_valid_epoch=4，valid AUC/GAUC/LogLoss=0.761015/0.673342/0.576493，test AUC/GAUC/LogLoss=0.746075/0.659765/0.592911。链路有效但排序和校准均未超过关键对照，不推广。
+- `semantic_simtier_long_short` full 完成：best_valid_epoch=3，valid AUC/GAUC/LogLoss=0.760972/0.673135/0.575097，test AUC/GAUC/LogLoss=0.745698/0.660579/0.592307。相比 `semantic_long_short` 略有提升，但 GAUC 仍低于 `latefusion` 0.660865、`sem48` seed2025 0.662346、`mbcgate005` seed2025 0.662555 和 `reg_mid` seed2025 0.662360；不推广。
+- `semantic_simtier_long_short` 首次 full preprocess 曾因 embedding 路径指向缺失的 `data/semantic/video_semantic_emb.parquet` 失败；已修正为 `data/semantic/video_semantic_emb_v4_full.pkl` 后完成重跑。
+- 语义增强方向总体结论：现有 semantic target、SimTier、semantic long-short 和 late fusion 尝试均未达到推广标准，除非明确重启新方向，否则停止继续扩展语义/LLM sweep。
+
 ### 新增内容
 
 - 新增 `src/data/semantic_loader.py`，支持离线 `video_semantic_emb.parquet` 的 list/string/emb_0 多列格式读取、NaN/Inf 清理、L2 normalize 和 unknown zero padding。
@@ -20,9 +27,9 @@
 
 ### 状态
 
-- 实现状态：implemented，三套语义 config 已完成 mock embedding debug。
+- 实现状态：implemented，语义 config 已完成 mock embedding debug。
 - Debug 状态：`semantic_simtier` / `semantic_long_short` / `semantic_simtier_long_short` 均已通过 preprocess debug 与 train debug。
-- Full run：未启动，保持 pending。
+- Full run：`semantic_long_short` 和 `semantic_simtier_long_short` 已完成，均不推广。
 - 当前保护模型配置未修改；三套语义实验使用独立 processed 目录，避免覆盖保护模型数据。
 
 ## 2026-05-03 - 代码级扩展验收与预处理鲁棒性修复

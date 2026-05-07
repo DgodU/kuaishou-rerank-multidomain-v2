@@ -85,8 +85,9 @@ python scripts/generate_qwen_video_embeddings.py --mock_debug --debug
 
 - `data/semantic/video_semantic_text.parquet`
 - `data/semantic/video_semantic_emb.parquet`
+- `data/semantic/video_semantic_emb_v4_full.pkl`
 
-语义增强实验只通过 MBC slices 注入 `semantic_target`、`simtier`、`semantic_interest`，不直接 residual 到 logit，不新增单独语义 logit head。详细计划见 `docs/semantic_simtier_experiment_plan.md`。
+语义增强实验主要通过 MBC slices 注入 `semantic_target`、`simtier`、`semantic_interest`；另外尝试过独立 late fusion residual head。完整语义增强和 semantic long-short full 结果已记录在 `experiments/results_tracking.md`、`outputs/model_comparison.json` 和 `docs/semantic_simtier_experiment_plan.md`。最终结论：`semantic_long_short` 与 `semantic_simtier_long_short` 链路可运行，但 test GAUC/LogLoss 未超过关键对照，不推广。
 
 ## 训练 ADS 基线
 

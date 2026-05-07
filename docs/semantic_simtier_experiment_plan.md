@@ -34,3 +34,14 @@ GAUC 按用户分组衡量排序能力。跨用户的全局热门度、目标视
 1. `semantic_simtier`
 2. `semantic_long_short`
 3. `semantic_simtier_long_short`，仅当前两个单实验至少一个超过保护模型后再运行。
+
+## Full 结果与最终结论
+
+| 实验 | best_valid_epoch | valid AUC | valid GAUC | valid LogLoss | test AUC | test GAUC | test LogLoss | 结论 |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| `semantic_long_short` | 4 | 0.761015 | 0.673342 | 0.576493 | 0.746075 | 0.659765 | 0.592911 | 不推广 |
+| `semantic_simtier_long_short` | 3 | 0.760972 | 0.673135 | 0.575097 | 0.745698 | 0.660579 | 0.592307 | 不推广 |
+
+`semantic_simtier_long_short` 相比 `semantic_long_short` 有小幅提升，但仍低于 `latefusion` test GAUC 0.660865、`sem48` seed2025 test GAUC 0.662346、`mbcgate005` seed2025 test GAUC 0.662555 和 `reg_mid` seed2025 test GAUC 0.662360。两个 semantic long-short full 实验均未达到推广标准。
+
+`semantic_simtier_long_short` 首次 full preprocess 曾因 embedding 路径指向缺失的 `data/semantic/video_semantic_emb.parquet` 失败，修正为 `data/semantic/video_semantic_emb_v4_full.pkl` 后完成重跑。最终结论是语义 long-short 链路有效但收益不足，现阶段停止继续扩展语义/LLM sweep。
