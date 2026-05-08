@@ -4,7 +4,9 @@
 
 本文档汇总 `/root/autodl-tmp/kuaishou-rerank-multidomain-shared` 中主要实验、模型/预处理改动、阶段性结论和当前保护模型状态。
 
-## 当前结论
+> 2026-05-08 更新：当前最强 protected candidate 已推进为 `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged`，测试 AUC/GAUC/LogLoss=`0.754048/0.663378/0.582084`。四 seed 公平确认 winner 为 `semantic_simtier_sem48_slicegate_reg_mid`，mean/min GAUC=`0.659845/0.656514`。下文保留 2026-05-01 阶段历史结论，最新完整总结见 `docs/experiment_summary_2026-05-08.md`。
+
+## 2026-05-01 阶段结论
 
 当前已确认的保护族主线是：
 
@@ -26,7 +28,7 @@ SideBias + DIN 风格目标注意力 + click-only 历史 + video_stat dense 特�
 
 结论：
 
-- `video_stat_ema_mbc_slices` 是当前已确认保护族候选。
+- 截至 2026-05-01，`video_stat_ema_mbc_slices` 是当时已确认保护族候选。
 - `video_stat_ema_match_features` 确认未通过，不推广；`video_stat_ema_dense128` 也不推广。
 - `auxrank`、`zero_init_bias`、`no_pcrg` 等方向目前不推广，也不要与其他不确定/拒绝组件叠加。
 - 后续资源监控不再作为实验文档记录重点；如需加速训练，应单独做训练吞吐优化实验。

@@ -200,6 +200,75 @@ class CTRTrainer:
             diffs = diffs[pair_idx]
         return torch.nn.functional.softplus(-diffs).mean()
 
+    def _slice_batch(self, batch: Dict[str, torch.Tensor], indices: torch.Tensor) -> Dict[str, torch.Tensor]:
+        batch_size = int(next(iter(batch.values())).shape[0])
+        return {k: v.index_select(0, indices) if v.ndim > 0 and int(v.shape[0]) == batch_size else v for k, v in batch.items()}
+
+    def _compute_ccss_loss(
+        self,
+        batch: Dict[str, torch.Tensor],
+        out: Dict[str, torch.Tensor | Dict[str, torch.Tensor]],
+    ) -> Dict[str, torch.Tensor]:
+        label = batch["label"]
+        device = label.device
+        zero = torch.zeros((), device=device)
+        if not bool(self.config.get("use_ccss", False)):
+            return {"ccss_pairwise_loss": zero, "ccss_factual_loss": zero}
+
+        tensor_name = str(self.config.get("ccss_feature_tensor", "dense_features"))
+        if tensor_name not in batch:
+            return {"ccss_pairwise_loss": zero, "ccss_factual_loss": zero}
+        features = batch[tensor_name]
+        if features.ndim != 2 or int(features.shape[1]) == 0:
+            return {"ccss_pairwise_loss": zero, "ccss_factual_loss": zero}
+
+        sample_ratio = float(self.config.get("ccss_sample_ratio", 1.0))
+        if sample_ratio < 1.0:
+            sample_size = max(1, int(label.shape[0] * sample_ratio))
+            indices = torch.randperm(label.shape[0], device=device)[:sample_size]
+            batch = self._slice_batch(batch, indices)
+            label = batch["label"]
+            features = batch[tensor_name]
+            out_logit = self._select_main_train_logit(out).index_select(0, indices)
+        else:
+            out_logit = self._select_main_train_logit(out)
+
+        feature_dim = int(features.shape[1])
+        configured_indices = self.config.get("ccss_feature_indices")
+        if configured_indices is None:
+            candidate_indices = torch.arange(feature_dim, device=device)
+        else:
+            valid_indices = [int(i) for i in configured_indices if 0 <= int(i) < feature_dim]
+            if not valid_indices:
+                return {"ccss_pairwise_loss": zero, "ccss_factual_loss": zero}
+            candidate_indices = torch.tensor(valid_indices, device=device, dtype=torch.long)
+
+        selected_pos = torch.randint(0, int(candidate_indices.numel()), (int(label.shape[0]),), device=device)
+        selected_idx = candidate_indices.index_select(0, selected_pos)
+        feature_std = features.detach().float().std(dim=0).clamp_min(float(self.config.get("ccss_min_delta", 1e-3)))
+        delta = feature_std.index_select(0, selected_idx) * float(self.config.get("ccss_delta_scale", 0.5))
+        direction = float(self.config.get("ccss_monotonic_direction", 1.0))
+        shift = torch.zeros_like(features)
+        shift.scatter_(1, selected_idx.unsqueeze(1), (direction * delta).unsqueeze(1))
+
+        positive = label > float(self.config.get("ccss_label_threshold", 0.5))
+        factual_features = torch.where(positive.unsqueeze(1), features + shift, features - shift)
+        counter_features = torch.where(positive.unsqueeze(1), features - shift, features + shift)
+
+        factual_batch = dict(batch)
+        counter_batch = dict(batch)
+        factual_batch[tensor_name] = factual_features
+        counter_batch[tensor_name] = counter_features
+        factual_logit = self._select_main_train_logit(self.model(factual_batch))
+        counter_logit = self._select_main_train_logit(self.model(counter_batch))
+
+        margin = float(self.config.get("ccss_margin", 0.0))
+        pos_loss = torch.nn.functional.relu(margin - (factual_logit - out_logit)) + torch.nn.functional.relu(margin - (out_logit - counter_logit))
+        neg_loss = torch.nn.functional.relu(margin - (counter_logit - out_logit)) + torch.nn.functional.relu(margin - (out_logit - factual_logit))
+        pairwise_loss = torch.where(positive, pos_loss, neg_loss).mean()
+        factual_loss = self.criterion(factual_logit, label)
+        return {"ccss_pairwise_loss": pairwise_loss, "ccss_factual_loss": factual_loss}
+
     def train_one_epoch(
         self,
         loader: DataLoader,
@@ -227,7 +296,12 @@ class CTRTrainer:
             batch = self._move_batch(batch)
             out = self.model(batch)
             loss_dict = self._compute_train_loss(out, batch["label"], batch["user_id"])  # logit/label: [B]
-            loss = loss_dict["total_loss"]
+            ccss_loss_dict = self._compute_ccss_loss(batch, out)
+            loss = (
+                loss_dict["total_loss"]
+                + float(self.config.get("ccss_loss_weight", 0.0)) * ccss_loss_dict["ccss_pairwise_loss"]
+                + float(self.config.get("ccss_factual_loss_weight", 0.0)) * ccss_loss_dict["ccss_factual_loss"]
+            )
 
             if random_aux_iter is not None and step_idx % random_aux_every_n_steps == 0:
                 try:
@@ -468,4 +542,50 @@ class CTRTrainer:
                 )
                 self.logger.info("Saved best-AUC checkpoint to %s", checkpoint_auc_path)
 
+        return checkpoint_path
+
+    def fit_without_validation(
+        self,
+        train_loader: DataLoader,
+        checkpoint_path: str | Path,
+        aux_rank_loader: DataLoader | None = None,
+        random_aux_loader: DataLoader | None = None,
+    ) -> str:
+        epochs = int(self.config.get("epochs", 20))
+        checkpoint_path = str(checkpoint_path)
+
+        for epoch in range(1, epochs + 1):
+            batch_sampler = getattr(train_loader, "batch_sampler", None)
+            if hasattr(batch_sampler, "set_epoch"):
+                batch_sampler.set_epoch(epoch)
+            aux_batch_sampler = getattr(aux_rank_loader, "batch_sampler", None) if aux_rank_loader is not None else None
+            if hasattr(aux_batch_sampler, "set_epoch"):
+                aux_batch_sampler.set_epoch(epoch)
+            train_stats = self.train_one_epoch(train_loader, aux_rank_loader=aux_rank_loader, random_aux_loader=random_aux_loader)
+            self.logger.info(
+                "Epoch %d | train_total_loss=%.6f | train_main_loss=%.6f | train_pairwise_loss=%.6f | train_aux_rank_loss=%.6f | train_random_aux_loss=%.6f | random_aux_steps_per_epoch=%.0f | train_aux_loss=%.6f | train_diversity_loss=%.6f | train_semantic_gate_regularization_loss=%.6f | no_validation=true",
+                epoch,
+                train_stats["train_total_loss"],
+                train_stats["train_main_loss"],
+                train_stats["train_pairwise_loss"],
+                train_stats["train_aux_rank_loss"],
+                train_stats["train_random_aux_loss"],
+                train_stats["random_aux_steps_per_epoch"],
+                train_stats["train_aux_loss"],
+                train_stats["train_diversity_loss"],
+                train_stats["train_semantic_gate_regularization_loss"],
+            )
+
+        torch.save(
+            {
+                "model_state_dict": self.ema_state_dict if self.use_ema and self.ema_state_dict is not None else self.model.state_dict(),
+                "config": self.config,
+                "best_epoch": epochs,
+                "best_valid_gauc": None,
+                "use_ema": self.use_ema,
+                "train_without_validation": True,
+            },
+            checkpoint_path,
+        )
+        self.logger.info("Saved final no-validation checkpoint to %s", checkpoint_path)
         return checkpoint_path

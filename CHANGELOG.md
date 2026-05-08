@@ -2,6 +2,31 @@
 
 本文档记录项目创建以来的主要工程改动、实验结果和阶段性结论。实验名、配置路径和指标字段保留英文，便于脚本和日志检索。
 
+## 2026-05-08 - 语义高点公平确认、no-validation protected 与 CCSS
+
+### Full 结果更新
+
+- 四 seed 公平确认完成：`semantic_simtier_sem48_slicegate_reg_mid` 以 test GAUC mean=`0.659845` 排第一，成为公平确认 winner；原 `protected_mbc_slices` 四 seed test GAUC mean=`0.657891`。
+- 基于 winner 的 `protected_train_valid_merged` 完成：test AUC/GAUC/LogLoss=`0.754048/0.663378/0.582084`，是当前最强 protected candidate。该实验合并 train+valid，使用固定 epoch，无验证集早停；若按稳定性口径发布，建议后续补多 seed。
+- 保守版 `protected_ccss` 完成：test AUC/GAUC/LogLoss=`0.747419/0.662450/0.590168`。CCSS 高于公平确认 mean GAUC，但低于 no-validation protected，不推广为当前 protected。
+- Static MBC residual/main-input/main-input+residual 三个替代方向均已完成，test GAUC 分别为 `0.656525/0.657588/0.655734`，均低于保护族，不推广。
+
+### 新增内容
+
+- `scripts/summarize_semantic_highpoint_confirm.py`：汇总四 seed 公平确认，按 mean GAUC、min GAUC、mean LogLoss 推荐 protected。
+- `scripts/report_disk_cleanup_candidates.py`：生成磁盘清理候选报告，只报告不删除。
+- `scripts/run_after_semantic_highpoint_queue.sh`：语义确认队列结束后自动汇总与生成清理报告。
+- `scripts/run_protected_followup_after_summary.py`：等待公平确认 winner 后自动生成并串行运行 no-validation protected 与 CCSS。
+- `scripts/train.py` 与 `CTRTrainer` 支持 `merge_valid_into_train`、`train_without_validation` 和 `fit_without_validation`。
+- `CTRTrainer` 新增保守版 CCSS loss：对 dense numerical features 做 factual/counterfactual 扰动，加入 pairwise monotonic contrast 和 factual BCE。
+
+### 状态
+
+- 当前推荐 protected candidate：`sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged`。
+- 当前公平确认 winner：`semantic_simtier_sem48_slicegate_reg_mid`。
+- CCSS 不替代 no-validation protected；后续仅作为调参研究方向。
+- 磁盘清理报告已生成，但未执行删除；数据目录和 checkpoint 清理需人工确认。
+
 ## 2026-05-06 - Qwen/LLM 视频语义 SimTier/long-short 实验实现
 
 ### Full 结果更新

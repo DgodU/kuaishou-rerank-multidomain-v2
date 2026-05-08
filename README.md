@@ -53,7 +53,11 @@ python scripts/preprocess.py --config configs/ads.yaml
 
 ## 当前代码级扩展配置
 
-当前保护配置仍是 `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices.yaml`。以下扩展均通过独立 config flag 控制，默认不影响保护配置：
+当前最强保护候选是 `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged.yaml`，对应测试 AUC/GAUC/LogLoss 为 `0.754048/0.663378/0.582084`。该结果基于公平确认 winner `semantic_simtier_sem48_slicegate_reg_mid`，并将 train+valid 合并训练、关闭验证集早停；它是当前最强单 seed protected candidate，但若要严格评估稳定性，仍建议补充 merged-train 多 seed。
+
+四 seed 公平确认 winner 是 `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid.yaml`，四 seed test GAUC mean/min 为 `0.659845/0.656514`。上一代保护族 `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices.yaml` 四 seed test GAUC mean/min 为 `0.657891/0.654963`，seed-2025/2026 GAUC 为 `0.660225/0.659100`。
+
+以下扩展均通过独立 config flag 控制，默认不影响未显式启用的实验配置：
 
 - `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_debias_protocol_baseline.yaml`
 - `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_random_aux.yaml`
@@ -71,6 +75,14 @@ python scripts/preprocess.py --config configs/ads.yaml
 - `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier.yaml`
 - `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_long_short.yaml`
 - `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_long_short.yaml`
+- `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48.yaml`
+- `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_mbcgate005.yaml`
+- `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid.yaml`
+- `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged.yaml`
+- `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_ccss.yaml`
+- `configs/sidebias_dinatt_click_only_video_stat_ema_static_mbc_residual.yaml`
+- `configs/sidebias_dinatt_click_only_video_stat_ema_static_mbc_main_input.yaml`
+- `configs/sidebias_dinatt_click_only_video_stat_ema_static_mbc_main_input_residual.yaml`
 
 ## Qwen/LLM 视频语义 embedding 实验
 
@@ -87,7 +99,7 @@ python scripts/generate_qwen_video_embeddings.py --mock_debug --debug
 - `data/semantic/video_semantic_emb.parquet`
 - `data/semantic/video_semantic_emb_v4_full.pkl`
 
-语义增强实验主要通过 MBC slices 注入 `semantic_target`、`simtier`、`semantic_interest`；另外尝试过独立 late fusion residual head。完整语义增强和 semantic long-short full 结果已记录在 `experiments/results_tracking.md`、`outputs/model_comparison.json` 和 `docs/semantic_simtier_experiment_plan.md`。最终结论：`semantic_long_short` 与 `semantic_simtier_long_short` 链路可运行，但 test GAUC/LogLoss 未超过关键对照，不推广。
+语义增强实验主要通过 MBC slices 注入 `semantic_target`、`simtier`、`semantic_interest`；另外尝试过独立 late fusion residual head。完整语义增强和 semantic long-short full 结果已记录在 `experiments/results_tracking.md`、`outputs/model_comparison.json` 和 `docs/semantic_simtier_experiment_plan.md`。最终结论：普通 semantic long-short 与 late fusion 不推广；四 seed 公平确认后，`semantic_simtier_sem48_slicegate_reg_mid` 是当前语义高点 winner，并进一步派生出当前最强 no-validation protected candidate。
 
 ## 训练 ADS 基线
 
@@ -170,29 +182,15 @@ GAUC 按 `user_id` 分组计算：
 - 配置别名：`configs/ads_transformer_side_sidebias.yaml`
 - 历史最佳测试 GAUC：`0.645878`
 
-当前实验主线已经推进到 `video_stat_ema_mbc_slices`：
+当前实验主线已经推进到语义 SimTier sem48 + per-slice gate regularization：
 
-- 当前已确认保护族候选：`configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices.yaml`
-- seed-2026 确认配置：`configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_confirm_seed2026.yaml`
-- seed-2026 确认测试 GAUC：`0.659100`
-- 上一代 `video_stat_ema` seed-2026 确认测试 GAUC：`0.658566`
-- `sidebias_dinatt_click_only_video_stat_ema_match_features` 是当前单次最佳观测，但 seed-2026 确认测试 GAUC 为 `0.657493`，低于 `video_stat_ema` 确认值，因此不推广。
-- `sidebias_dinatt_click_only_video_stat_ema_dense128` 测试 GAUC 为 `0.657414`，低于 `video_stat_ema` seed-2026 确认值，因此不推广。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices` 单次测试 GAUC 为 `0.660225`；seed-2026 确认测试 GAUC 为 `0.659100`，高于上一代 `video_stat_ema` 确认值，因此已推广为当前保护族。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_gate02` 测试 GAUC 为 `0.659271`，低于同 seed 当前保护候选 `0.660225`，因此不推广。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_gate005` 测试 GAUC 为 `0.659455`，仍低于同 seed 当前保护候选 `0.660225`，因此不推广。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_branch64` 测试 GAUC 为 `0.657912`，明显低于当前保护候选并低于上一代 EMA 确认值，因此拒绝。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_branch256` 测试 GAUC 为 `0.659231`，低于同 seed 当前保护候选 `0.660225`，因此不推广。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_auxloss` 测试 GAUC 为 `0.658578`，低于当前 MBC 确认值和同 seed 保护候选，因此不推广。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_fusion128` 测试 GAUC 为 `0.658569`，低于当前 MBC 确认值和同 seed 保护候选，且 LogLoss 明显变差，因此不推广。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_fusion32` 测试 GAUC 为 `0.658648`，低于当前 MBC 确认值和同 seed 保护候选，且 LogLoss 明显变差，因此不推广。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_gate015` 测试 GAUC 为 `0.658795`，虽测试 AUC 提升到 `0.746850`，但主指标低于当前 MBC 确认值和同 seed 保护候选，因此不推广。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_gate012` 测试 GAUC 为 `0.659435`，高于 MBC seed-2026 确认值但低于同 seed 保护候选 `0.660225`，因此不推广。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_gate008` 测试 GAUC 为 `0.659784`，比 `gate012` 更接近但仍低于同 seed 保护候选 `0.660225`，因此不推广。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_gate009` 测试 GAUC 为 `0.659383`，低于 `gate008` 和同 seed 保护候选 `0.660225`，因此不推广。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_attn256` 测试 GAUC 为 `0.657895`，低于当前保护候选和 MBC seed-2026 确认值，因此拒绝。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_attn64` 测试 GAUC 为 `0.659065`，优于 `attn256` 但仍低于当前保护候选和 MBC seed-2026 确认值，因此不推广。
-- `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_sideattnscale005` 测试 GAUC 为 `0.656681`，明显低于当前保护候选和 MBC seed-2026 确认值，且 LogLoss 变差，因此拒绝；本轮配置级单变量调参停止。
+- 当前最强 protected candidate：`configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged.yaml`
+- 测试 AUC/GAUC/LogLoss：`0.754048/0.663378/0.582084`
+- 公平确认 winner：`configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid.yaml`
+- 四 seed test GAUC mean/min/std：`0.659845/0.656514/0.002195`
+- 原 protected MBC slices 四 seed test GAUC mean/min/std：`0.657891/0.654963/0.001991`
+- CCSS 版 `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_ccss.yaml` 测试 AUC/GAUC/LogLoss 为 `0.747419/0.662450/0.590168`，低于 no-validation protected，不推广为当前 protected。
+- `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices.yaml` 仍作为上一代保护族参考；其 seed-2025/2026/2027/2028 test GAUC 为 `0.660225/0.659100/0.657276/0.654963`。
 
 新实验必须遵循单变量纪律：
 

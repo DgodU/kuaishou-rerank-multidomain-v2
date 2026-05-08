@@ -1575,6 +1575,48 @@
       "test_logloss": 0.5923069177081524,
       "source_log": "logs/ads_transformer_side_sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_long_short.log",
       "conclusion": "不推广：SimTier + semantic long-short 比 semantic_long_short GAUC/LogLoss 略好，但 test GAUC=0.660579 仍低于 latefusion、sem48 seed2025、mbcgate005 seed2025 和 reg_mid seed2025；LogLoss=0.592307 弱于 latefusion，基本不优于 sem48 seed2025。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_static_mbc_residual",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 3,
+      "best_valid_auc": 0.757793,
+      "best_valid_gauc": 0.671583,
+      "best_valid_logloss": 0.578862,
+      "test_auc": 0.7425604367554348,
+      "test_gauc": 0.6565249666780002,
+      "test_logloss": 0.594724416540732,
+      "source_log": "logs/ads_transformer_side_sidebias_dinatt_click_only_video_stat_ema_static_mbc_residual.log",
+      "conclusion": "拒绝：将保护模型中的 MBC slices residual 替换为 Static MBC residual 后，test GAUC=0.656525，明显低于保护 MBC slices seed2025 的 0.660225 和 seed2026 确认的 0.659100；test AUC=0.742560 低于保护 0.745756，LogLoss=0.594724 也显著差于保护 0.590654。不进入 seed 确认。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_static_mbc_main_input",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 3,
+      "best_valid_auc": 0.758588,
+      "best_valid_gauc": 0.671501,
+      "best_valid_logloss": 0.577981,
+      "test_auc": 0.7427270545761077,
+      "test_gauc": 0.657587962585217,
+      "test_logloss": 0.5937931737510073,
+      "source_log": "logs/ads_transformer_side_sidebias_dinatt_click_only_video_stat_ema_static_mbc_main_input.log",
+      "conclusion": "拒绝：Static MBC main-input 融合使用 [static_mbc_vector, interest, dense_emb] 作为主 MLP 输入且不叠加 Static MBC residual，test GAUC=0.657588，较 Static MBC residual 0.656525 略有改善，但仍低于 video_stat_ema seed2026 确认基线 0.658566、MBC seed2026 确认 0.659100 和当前保护 MBC slices seed2025 0.660225；AUC=0.742727、LogLoss=0.593793 也弱于保护 MBC slices。不进入 seed 确认。"
+    },
+    {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_static_mbc_main_input_residual",
+      "model_name": "ads_transformer_side",
+      "mode": "full",
+      "best_valid_epoch": 3,
+      "best_valid_auc": 0.759149,
+      "best_valid_gauc": 0.671764,
+      "best_valid_logloss": 0.577448,
+      "test_auc": 0.7424001234161609,
+      "test_gauc": 0.6557340016896046,
+      "test_logloss": 0.5939029446614292,
+      "source_log": "logs/ads_transformer_side_sidebias_dinatt_click_only_video_stat_ema_static_mbc_main_input_residual.log",
+      "conclusion": "拒绝：Static MBC main-input + residual 使用 [static_mbc_vector, interest, dense_emb] 作为主 MLP 输入，并额外叠加由 static_mbc_vector 产生的 gated residual。test GAUC=0.655734，低于 main-input-only 0.657588、Static MBC residual-only 0.656525、video_stat_ema seed2026 确认基线 0.658566、MBC seed2026 确认 0.659100 和当前保护 MBC slices seed2025 0.660225；说明 residual 叠加与 main-input 融合存在负干扰。不进入 seed 确认。"
     }
   ],
   "author_single_switch_summary_20260504": {
@@ -1904,5 +1946,62 @@
       "debug_test_logloss": 0.6704355037375169,
       "debug_metrics_file": "outputs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_long_short_debug_test_metrics.json"
     }
+  },
+  "semantic_highpoint_fair_confirm_and_protected_followup_20260508": {
+    "summary_file": "outputs/semantic_highpoint_fair_confirm_summary.json",
+    "selection_rule": "eligible candidates require all seeds 2025-2028; rank by mean test GAUC, then min test GAUC, then lower mean LogLoss",
+    "recommended_fair_confirm_model": "semantic_simtier_sem48_slicegate_reg_mid",
+    "fair_confirm_candidates": {
+      "protected_mbc_slices": {
+        "test_auc_mean": 0.745561,
+        "test_gauc_mean": 0.657891,
+        "test_gauc_min": 0.654963,
+        "test_gauc_std": 0.001991,
+        "test_logloss_mean": 0.590395
+      },
+      "semantic_simtier_sem48": {
+        "test_auc_mean": 0.747106,
+        "test_gauc_mean": 0.659736,
+        "test_gauc_min": 0.656649,
+        "test_gauc_std": 0.002066,
+        "test_logloss_mean": 0.590212
+      },
+      "semantic_simtier_sem48_mbcgate005": {
+        "test_auc_mean": 0.746799,
+        "test_gauc_mean": 0.65939,
+        "test_gauc_min": 0.65696,
+        "test_gauc_std": 0.002177,
+        "test_logloss_mean": 0.58986
+      },
+      "semantic_simtier_sem48_slicegate_reg_mid": {
+        "test_auc_mean": 0.747148,
+        "test_gauc_mean": 0.659845,
+        "test_gauc_min": 0.656514,
+        "test_gauc_std": 0.002195,
+        "test_logloss_mean": 0.590712
+      }
+    },
+    "protected_train_valid_merged": {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged",
+      "test_auc": 0.754048,
+      "test_gauc": 0.663378,
+      "test_logloss": 0.582084,
+      "metrics_file": "outputs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged_test_metrics.json"
+    },
+    "protected_ccss": {
+      "run_name": "sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_ccss",
+      "test_auc": 0.747419,
+      "test_gauc": 0.66245,
+      "test_logloss": 0.590168,
+      "metrics_file": "outputs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_ccss_test_metrics.json"
+    },
+    "deltas": {
+      "no_valid_vs_fair_winner_mean_gauc": 0.003533,
+      "no_valid_vs_fair_winner_mean_logloss": -0.008628,
+      "ccss_vs_fair_winner_mean_gauc": 0.002604,
+      "ccss_vs_no_valid_gauc": -0.000929,
+      "ccss_vs_no_valid_logloss": 0.008084
+    },
+    "conclusion": "Fair confirmation selects semantic_simtier_sem48_slicegate_reg_mid by mean GAUC. The train+valid merged no-validation run is the strongest current protected candidate. Conservative CCSS improves over the fair-confirmation mean but underperforms the no-validation protected run, so it is not promoted as the protected model."
   }
 }

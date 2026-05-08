@@ -14,6 +14,7 @@ from src.models.mbc_slices import MBCSemanticHead
 from src.models.pcrg_token import PCRGTokenLayer
 from src.models.position_bias import PositionBiasTower
 from src.models.semantic_features import SemanticLongShortInterest, SimTierEncoder, VideoSemanticEncoder
+from src.models.static_mbc import StaticMBCInteractionLayer
 from src.models.transformer_fusion import TransformerFusion
 
 
@@ -199,6 +200,8 @@ class ADSTransformerSideModel(ADSModel):
             )
         # MBC semantic slices：融合不同语义切片形成小残差头，是当前保护族的增强候选。
         self.use_mbc_slices = bool(config.get("use_mbc_slices", False))
+        self.use_static_mbc_residual = bool(config.get("use_static_mbc_residual", False))
+        self.use_static_mbc_main_input = bool(config.get("use_static_mbc_main_input", False))
         self.use_random_head = bool(config.get("use_random_head", False))
         self.use_position_bias_tower = bool(config.get("use_position_bias_tower", False))
         self.use_rank_calib_split = bool(config.get("use_rank_calib_split", False))
@@ -331,6 +334,60 @@ class ADSTransformerSideModel(ADSModel):
                 nn.GELU(),
                 nn.Linear(mbc_dynamic_hidden_dim, 1),
             )
+        self.static_mbc_layer = None
+        self.static_mbc_residual_head = None
+        self.static_mbc_gate_logit = None
+        self.static_mbc_fusion_dim = int(config.get("mbc_fusion_dim", 64))
+        if str(config.get("mbc_fusion_type", "mean")).lower() == "concat":
+            enabled_branches = sum(
+                [
+                    bool(config.get("use_efgc_branch", True)),
+                    bool(config.get("use_cross_branch", True)),
+                    bool(config.get("use_deep_branch", True)),
+                ]
+            )
+            self.static_mbc_fusion_dim *= max(enabled_branches, 1)
+        self.static_mbc_branch_heads = nn.ModuleDict()
+        if self.use_static_mbc_residual or self.use_static_mbc_main_input:
+            self.static_mbc_field_names = [
+                "user_id",
+                "user_active_degree",
+                "register_days_bucket",
+                "fans_user_num_bucket",
+                "follow_user_num_bucket",
+                "friend_user_num_bucket",
+                "target_video_id",
+                "target_category_l1",
+                "target_category_l2",
+                "target_category_l3",
+                "target_category_l4",
+                "target_video_type",
+                "target_duration_bucket",
+                "target_tag",
+                "tab",
+            ]
+            if self.use_user_onehot_context:
+                self.static_mbc_field_names.extend(self.user_onehot_field_names)
+            self.static_mbc_layer = StaticMBCInteractionLayer(
+                field_embedding_dim=self.embedding_dim,
+                static_field_names=self.static_mbc_field_names,
+                config=config,
+            )
+            branch_dim = int(config.get("mbc_fusion_dim", 64))
+            self.static_mbc_branch_heads = nn.ModuleDict(
+                {
+                    "efgc": nn.Linear(branch_dim, 1),
+                    "cross": nn.Linear(branch_dim, 1),
+                    "deep": nn.Linear(branch_dim, 1),
+                }
+            )
+            if self.use_static_mbc_residual:
+                self.static_mbc_residual_head = nn.Linear(self.static_mbc_fusion_dim, 1)
+                static_mbc_gate_init = float(config.get("static_mbc_gate_init", config.get("mbc_gate_init", 0.1)))
+                static_mbc_gate_init = min(max(static_mbc_gate_init, 1e-4), 1.0 - 1e-4)
+                self.static_mbc_gate_logit = nn.Parameter(
+                    torch.tensor(math.log(static_mbc_gate_init / (1.0 - static_mbc_gate_init)), dtype=torch.float32)
+                )
         self.history_dense_dim = int(feature_maps.get("history_dense_dim", 0))
         self.history_dense_proj = None
         self.history_dense_emb_dim = int(config.get("history_dense_emb_dim", 64))
@@ -411,7 +468,10 @@ class ADSTransformerSideModel(ADSModel):
                 nn.GELU(),
                 nn.Dropout(float(config.get("semantic_match_dropout", config.get("dropout", 0.1)))),
             )
-        final_in = self.d_attn + self.d_q + self.embedding_dim + self.d_D
+        if self.use_static_mbc_main_input:
+            final_in = self.static_mbc_fusion_dim + self.d_attn
+        else:
+            final_in = self.d_attn + self.d_q + self.embedding_dim + self.d_D
         if self.use_dense_features and self.dense_proj is not None and not self.use_rank_calib_split:
             final_in += dense_hidden_dim
         if self.history_dense_proj is not None:
@@ -605,6 +665,62 @@ class ADSTransformerSideModel(ADSModel):
             mbc_gate = torch.sigmoid(self.mbc_gate_logit)
         residual = mbc_gate * mbc_logit
         return residual, z_mbc, mbc_logit, mbc_gate, author_mbc_delta
+
+    def _build_static_mbc_field_embeddings(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        static_fields: Dict[str, torch.Tensor] = {
+            "user_id": self.user_id_emb(batch["user_id"]),
+            "user_active_degree": self.user_active_degree_emb(batch["user_active_degree"]),
+            "register_days_bucket": self.register_days_bucket_emb(batch["register_days_bucket"]),
+            "fans_user_num_bucket": self.fans_user_num_bucket_emb(batch["fans_user_num_bucket"]),
+            "follow_user_num_bucket": self.follow_user_num_bucket_emb(batch["follow_user_num_bucket"]),
+            "friend_user_num_bucket": self.friend_user_num_bucket_emb(batch["friend_user_num_bucket"]),
+            "target_video_id": self.video_id_emb(batch["target_video_id"]),
+            "target_category_l1": self.category_l1_emb(batch["target_category_l1"]),
+            "target_category_l2": self.category_l2_emb(batch["target_category_l2"]),
+            "target_category_l3": self.category_l3_emb(batch["target_category_l3"]),
+            "target_category_l4": self.category_l4_emb(batch["target_category_l4"]),
+            "target_video_type": self.video_type_emb(batch["target_video_type"]),
+            "target_duration_bucket": self.duration_bucket_emb(batch["target_duration_bucket"]),
+            "target_tag": self.tag_emb(batch["target_tag"]),
+            "tab": self.tab_emb(batch["tab"]),
+        }
+        if self.use_user_onehot_context:
+            for name in self.user_onehot_field_names:
+                if name in batch:
+                    static_fields[name] = self.user_onehot_embs[name](batch[name])
+        return static_fields
+
+    def _apply_static_mbc_residual(
+        self,
+        batch: Dict[str, torch.Tensor],
+        reference: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor | None, torch.Tensor | None, torch.Tensor | None, Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
+        residual = torch.zeros(reference.size(0), device=reference.device, dtype=reference.dtype)
+        if (
+            not (self.use_static_mbc_residual or self.use_static_mbc_main_input)
+            or self.static_mbc_layer is None
+        ):
+            return residual, None, None, None, {}, {}
+        static_out = self.static_mbc_layer(self._build_static_mbc_field_embeddings(batch))
+        static_vector = static_out["fusion"]
+        static_logit = None
+        static_gate = None
+        if self.use_static_mbc_residual and self.static_mbc_residual_head is not None and self.static_mbc_gate_logit is not None:
+            static_logit = self.static_mbc_residual_head(static_vector).squeeze(-1)
+            static_gate = torch.sigmoid(self.static_mbc_gate_logit)
+            residual = static_gate * static_logit
+        branch_vectors = {
+            name: value
+            for name, value in static_out.items()
+            if value is not None
+        }
+        branch_logits = {}
+        for name, value in branch_vectors.items():
+            if name in self.static_mbc_branch_heads:
+                branch_logits[f"static_mbc_{name}"] = self.static_mbc_branch_heads[name](value).squeeze(-1)
+        if static_logit is not None:
+            branch_logits["static_mbc_fusion"] = static_logit
+        return residual, static_vector, static_logit, static_gate, branch_vectors, branch_logits
 
     def _apply_semantic_late_fusion(
         self,
@@ -1065,21 +1181,28 @@ class ADSTransformerSideModel(ADSModel):
             interest = self.interest_ffn(interest)  # [B, d_attn]
             semantic_outputs = self._build_semantic_outputs(batch, hist_mask, E_Q, E_D, interest.dtype)
             mbc_residual, mbc_vector, mbc_logit, mbc_gate, author_mbc_delta = self._apply_mbc_slices(interest, E_Q, E_D, user_emb, side_info, hist_mask, batch, semantic_outputs)
+            static_mbc_residual, static_mbc_vector, static_mbc_logit, static_mbc_gate, static_branch_vectors, static_branch_logits = self._apply_static_mbc_residual(batch, interest)
             # 最终预测融合兴趣、目标、用户、场景，并可叠加 dense/MBC 残差。
-            final_input = torch.cat([interest, E_Q, user_emb, E_D], dim=-1)
+            if self.use_static_mbc_main_input and static_mbc_vector is not None:
+                final_input = torch.cat([static_mbc_vector, interest], dim=-1)
+            else:
+                final_input = torch.cat([interest, E_Q, user_emb, E_D], dim=-1)
             final_input, dense_residual = self._append_dense_features(batch, final_input)
             final_input, history_dense_emb, author_match_features, author_prior_emb, semantic_emb, semantic_match_emb = self._append_experimental_features(batch, final_input, semantic_outputs)
             semantic_late_residual, _, _ = self._apply_semantic_late_fusion(
                 interest, E_Q, E_D, user_emb, semantic_outputs
             )
-            logit = self.mlp(final_input).squeeze(-1) + dense_residual + mbc_residual + semantic_late_residual  # [B]
+            logit = self.mlp(final_input).squeeze(-1) + dense_residual + mbc_residual + static_mbc_residual + semantic_late_residual  # [B]
             out = self._apply_output_heads(batch, final_input, logit)
             out["attn"] = alpha
             self._attach_semantic_diagnostics(out, semantic_outputs)
             self._attach_semantic_gate_regularization(out)
+            debug_mbc_vector = mbc_vector if mbc_vector is not None else static_mbc_vector
+            debug_mbc_logit = mbc_logit if mbc_logit is not None else static_mbc_logit
+            debug_mbc_gate = mbc_gate if mbc_gate is not None else static_mbc_gate
             self._maybe_log_debug_shapes(
                 batch, E_S, E_D, E_Q, Q, K, V, hist_mask, interest, final_input, out["logit"],
-                score_bias, attn_score, mbc_vector, mbc_logit, mbc_gate,
+                score_bias, attn_score, debug_mbc_vector, debug_mbc_logit, debug_mbc_gate,
                 random_logit=out.get("random_logit"),
                 relevance_logit=out.get("relevance_logit"),
                 position_bias_logit=out.get("position_bias_logit"),
@@ -1098,9 +1221,19 @@ class ADSTransformerSideModel(ADSModel):
                 long_short_gate=long_short_gate,
                 author_mbc_delta=author_mbc_delta,
             )
+            branch_vectors = {}
+            branch_logits = {}
             if mbc_vector is not None and mbc_logit is not None:
-                out["branch_vectors"] = {"mbc_semantic": mbc_vector}
-                out["branch_logits"] = {"mbc_semantic": mbc_logit}
+                branch_vectors["mbc_semantic"] = mbc_vector
+                branch_logits["mbc_semantic"] = mbc_logit
+            if static_branch_vectors:
+                branch_vectors.update(static_branch_vectors)
+            if static_branch_logits:
+                branch_logits.update(static_branch_logits)
+            if branch_vectors:
+                out["branch_vectors"] = branch_vectors
+            if branch_logits:
+                out["branch_logits"] = branch_logits
             return out
 
         # 5/6) Transformer for sequential context modeling (without side info)
@@ -1177,20 +1310,27 @@ class ADSTransformerSideModel(ADSModel):
         mbc_residual, mbc_vector, mbc_logit, mbc_gate, author_mbc_delta = self._apply_mbc_slices(
             interest, E_Q, E_D, user_emb, side_info, hist_mask, batch, semantic_outputs
         )
-        final_input = torch.cat([interest, E_Q, user_emb, E_D], dim=-1)
+        static_mbc_residual, static_mbc_vector, static_mbc_logit, static_mbc_gate, static_branch_vectors, static_branch_logits = self._apply_static_mbc_residual(batch, interest)
+        if self.use_static_mbc_main_input and static_mbc_vector is not None:
+            final_input = torch.cat([static_mbc_vector, interest], dim=-1)
+        else:
+            final_input = torch.cat([interest, E_Q, user_emb, E_D], dim=-1)
         final_input, dense_residual = self._append_dense_features(batch, final_input)
         final_input, history_dense_emb, author_match_features, author_prior_emb, semantic_emb, semantic_match_emb = self._append_experimental_features(batch, final_input, semantic_outputs)
         semantic_late_residual, _, _ = self._apply_semantic_late_fusion(
             interest, E_Q, E_D, user_emb, semantic_outputs
         )
-        logit = self.mlp(final_input).squeeze(-1) + dense_residual + mbc_residual + semantic_late_residual  # [B]
+        logit = self.mlp(final_input).squeeze(-1) + dense_residual + mbc_residual + static_mbc_residual + semantic_late_residual  # [B]
         out = self._apply_output_heads(batch, final_input, logit)
         out["attn"] = alpha
         self._attach_semantic_diagnostics(out, semantic_outputs)
         self._attach_semantic_gate_regularization(out)
+        debug_mbc_vector = mbc_vector if mbc_vector is not None else static_mbc_vector
+        debug_mbc_logit = mbc_logit if mbc_logit is not None else static_mbc_logit
+        debug_mbc_gate = mbc_gate if mbc_gate is not None else static_mbc_gate
         self._maybe_log_debug_shapes(
             batch, E_S, E_D, E_Q, Q, K, V, hist_mask, interest, final_input, out["logit"],
-            None, attn_score, mbc_vector, mbc_logit, mbc_gate,
+            None, attn_score, debug_mbc_vector, debug_mbc_logit, debug_mbc_gate,
             random_logit=out.get("random_logit"),
             relevance_logit=out.get("relevance_logit"),
             position_bias_logit=out.get("position_bias_logit"),
@@ -1209,7 +1349,17 @@ class ADSTransformerSideModel(ADSModel):
             long_short_gate=long_short_gate,
             author_mbc_delta=author_mbc_delta,
         )
+        branch_vectors = {}
+        branch_logits = {}
         if mbc_vector is not None and mbc_logit is not None:
-            out["branch_vectors"] = {"mbc_semantic": mbc_vector}
-            out["branch_logits"] = {"mbc_semantic": mbc_logit}
+            branch_vectors["mbc_semantic"] = mbc_vector
+            branch_logits["mbc_semantic"] = mbc_logit
+        if static_branch_vectors:
+            branch_vectors.update(static_branch_vectors)
+        if static_branch_logits:
+            branch_logits.update(static_branch_logits)
+        if branch_vectors:
+            out["branch_vectors"] = branch_vectors
+        if branch_logits:
+            out["branch_logits"] = branch_logits
         return out

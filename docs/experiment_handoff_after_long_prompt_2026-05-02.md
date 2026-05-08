@@ -4,6 +4,8 @@
 
 用途：给外部大模型快速更新当前项目、实验状态、已做工作、结论和后续建议。
 
+> 2026-05-08 更新：本文档是 2026-05-02 的历史交接。最新保护候选、语义公平确认、no-validation protected、CCSS 与磁盘清理状态请优先阅读 `docs/experiment_summary_2026-05-08.md`、`experiments/results_tracking.md` 和 `outputs/model_comparison.json`。当前最强 protected candidate 为 `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged`，测试 AUC/GAUC/LogLoss=`0.754048/0.663378/0.582084`。
+
 ## 1. 项目与当前任务背景
 
 项目路径：

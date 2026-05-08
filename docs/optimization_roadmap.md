@@ -2,16 +2,17 @@
 
 ## 当前主模型
 
-当前已确认的保护族候选是：SideBias + DIN 风格目标注意力 + click-only 历史 + video-stat dense 特征 + EMA。
+当前最强 protected candidate 是：SideBias + DIN 风格目标注意力 + click-only 历史 + video-stat dense 特征 + EMA + MBC slices + semantic SimTier sem48 + trainable per-slice gates with regularization，并在最终 protected follow-up 中合并 train+valid 训练。
 
-- 模型：ADS-Transformer-SideInfo + Side Attention Bias + DIN 风格目标注意力 + click-only 历史过滤 + 目标视频统计 dense 特征 + EMA 评估/保存
-- 候选配置：`configs/sidebias_dinatt_click_only_video_stat_ema.yaml`
-- 确认配置：`configs/sidebias_dinatt_click_only_video_stat_ema_confirm_seed2026.yaml`
-- Seed-2025 测试 GAUC：0.658104
-- Seed-2026 确认测试 GAUC：0.658566
+- 模型：ADS-Transformer-SideInfo + Side Attention Bias + DIN 风格目标注意力 + click-only 历史过滤 + 目标视频统计 dense 特征 + EMA 评估/保存 + semantic target/SimTier MBC slices + per-slice gates
+- 当前 protected candidate 配置：`configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged.yaml`
+- 当前 protected candidate 测试 AUC/GAUC/LogLoss：`0.754048/0.663378/0.582084`
+- 公平确认 winner 配置：`configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid.yaml`
+- 公平确认 winner 四 seed test GAUC mean/min/std：`0.659845/0.656514/0.002195`
+- 上一代 MBC slices 四 seed test GAUC mean/min/std：`0.657891/0.654963/0.001991`
 - 主要目标：提升以 GAUC 衡量的用户内排序质量
 
-2026-05-03 工程状态：random auxiliary、PAL、rank/calibration split、history dense、author、long-short interest、PCRG token、TransformerFusion、semantic placeholder、dynamic MBC gate 均已模块化接入，使用独立 config flag 控制，默认不影响当前保护配置；最低 debug 验收已通过，未自动启动新的 full run。
+2026-05-08 工程状态：random auxiliary、PAL、rank/calibration split、history dense、author、long-short interest、PCRG token、TransformerFusion、semantic target/SimTier、dynamic MBC gate、Static MBC residual/main-input、no-validation training、CCSS loss 均由独立 config flag 控制，默认不影响未显式启用的实验配置。CCSS 当前未超过 no-validation protected，不作为保护模型。
 
 上一代不含 EMA 的 video-stat 家族仍作为已确认参考：
 

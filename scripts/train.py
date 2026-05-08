@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict
 
 import torch
+from torch.utils.data import ConcatDataset
 from torch.utils.data import DataLoader
 
 import sys
@@ -112,6 +113,8 @@ def main() -> None:
     logger.info("Loading datasets: %s | %s", train_file, valid_file)
     train_ds = KuaiRandDataset(train_file, config=config, feature_maps=feature_maps)
     valid_ds = KuaiRandDataset(valid_file, config=config, feature_maps=feature_maps)
+    if bool(config.get("merge_valid_into_train", False)):
+        train_ds = ConcatDataset([train_ds, valid_ds])
     logger.info("Loaded train/valid dataset sizes: %d / %d", len(train_ds), len(valid_ds))
 
     num_workers = int(config.get("num_workers", 4))
@@ -130,6 +133,8 @@ def main() -> None:
         common_loader_kwargs["prefetch_factor"] = prefetch_factor
 
     if bool(config.get("use_user_group_sampler", False)):
+        if isinstance(train_ds, ConcatDataset):
+            raise ValueError("use_user_group_sampler is not supported with merge_valid_into_train=True")
         train_batch_sampler = UserGroupBatchSampler(
             user_ids=train_ds.arrays["user_id"],
             labels=train_ds.arrays["label"],
@@ -227,12 +232,14 @@ def main() -> None:
             int(config.get("random_aux_every_n_steps", 8)),
             float(config.get("random_loss_weight", 0.05)),
         )
-    valid_loader = DataLoader(
-        valid_ds,
-        batch_size=batch_size,
-        shuffle=False,
-        **common_loader_kwargs,
-    )
+    valid_loader = None
+    if not bool(config.get("train_without_validation", False)):
+        valid_loader = DataLoader(
+            valid_ds,
+            batch_size=batch_size,
+            shuffle=False,
+            **common_loader_kwargs,
+        )
     model = build_model(config, feature_maps)
     n_params = count_parameters(model)
     logger.info("Model parameter count | total=%d | trainable=%d", n_params["total"], n_params["trainable"])
@@ -276,7 +283,10 @@ def main() -> None:
     if args.debug:
         ckpt_base = f"{ckpt_base}_debug"
     ckpt_path = ckpt_dir / f"{ckpt_base}_best.pt"
-    best_ckpt_path = trainer.fit(train_loader, valid_loader, ckpt_path, aux_rank_loader=aux_rank_loader, random_aux_loader=random_aux_loader)
+    if bool(config.get("train_without_validation", False)):
+        best_ckpt_path = trainer.fit_without_validation(train_loader, ckpt_path, aux_rank_loader=aux_rank_loader, random_aux_loader=random_aux_loader)
+    else:
+        best_ckpt_path = trainer.fit(train_loader, valid_loader, ckpt_path, aux_rank_loader=aux_rank_loader, random_aux_loader=random_aux_loader)
 
     state = torch.load(best_ckpt_path, map_location=device)
     model.load_state_dict(state["model_state_dict"])

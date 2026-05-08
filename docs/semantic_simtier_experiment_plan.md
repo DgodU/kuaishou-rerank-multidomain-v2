@@ -41,7 +41,14 @@ GAUC 按用户分组衡量排序能力。跨用户的全局热门度、目标视
 |---|---:|---:|---:|---:|---:|---:|---:|---|
 | `semantic_long_short` | 4 | 0.761015 | 0.673342 | 0.576493 | 0.746075 | 0.659765 | 0.592911 | 不推广 |
 | `semantic_simtier_long_short` | 3 | 0.760972 | 0.673135 | 0.575097 | 0.745698 | 0.660579 | 0.592307 | 不推广 |
+| `semantic_simtier_sem48` 四 seed | - | - | - | - | 0.747106 | 0.659736 | 0.590212 | 排名第二 |
+| `semantic_simtier_sem48_mbcgate005` 四 seed | - | - | - | - | 0.746799 | 0.659390 | 0.589860 | LogLoss 最好但 mean GAUC 不最高 |
+| `semantic_simtier_sem48_slicegate_reg_mid` 四 seed | - | - | - | - | 0.747148 | 0.659845 | 0.590712 | 公平确认 winner |
+| `semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged` | - | - | - | - | 0.754048 | 0.663378 | 0.582084 | 当前最强 protected candidate |
+| `semantic_simtier_sem48_slicegate_reg_mid_protected_ccss` | 4 | 0.762768 | 0.673735 | 0.573917 | 0.747419 | 0.662450 | 0.590168 | 不替代 no-validation protected |
 
 `semantic_simtier_long_short` 相比 `semantic_long_short` 有小幅提升，但仍低于 `latefusion` test GAUC 0.660865、`sem48` seed2025 test GAUC 0.662346、`mbcgate005` seed2025 test GAUC 0.662555 和 `reg_mid` seed2025 test GAUC 0.662360。两个 semantic long-short full 实验均未达到推广标准。
 
-`semantic_simtier_long_short` 首次 full preprocess 曾因 embedding 路径指向缺失的 `data/semantic/video_semantic_emb.parquet` 失败，修正为 `data/semantic/video_semantic_emb_v4_full.pkl` 后完成重跑。最终结论是语义 long-short 链路有效但收益不足，现阶段停止继续扩展语义/LLM sweep。
+`semantic_simtier_long_short` 首次 full preprocess 曾因 embedding 路径指向缺失的 `data/semantic/video_semantic_emb.parquet` 失败，修正为 `data/semantic/video_semantic_emb_v4_full.pkl` 后完成重跑。最终结论是语义 long-short 链路有效但收益不足。
+
+后续公平确认阶段对 sem48、mbcgate005、reg_mid 与原 protected MBC slices 做了 2025-2028 四 seed 对比。`semantic_simtier_sem48_slicegate_reg_mid` 的 mean test GAUC 最高，成为公平确认 winner；在 train+valid merged/no-validation 口径下进一步达到 test GAUC `0.663378`，成为当前最强 protected candidate。当前保守版 CCSS 低于 no-validation protected，不推广为保护模型。
