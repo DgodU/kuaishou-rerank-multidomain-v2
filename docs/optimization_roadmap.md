@@ -1,5 +1,29 @@
 # 优化路线图
 
+<!-- roadmap_reader_note:start -->
+## Reader Note
+
+This roadmap explains how the model family evolved. It includes many rejected or historical directions because they are useful for avoiding repeated experiments.
+
+Current high-level path:
+
+```text
+SideBias baseline
+  -> DIN-style target attention
+  -> click-only history
+  -> video-stat dense features
+  -> EMA
+  -> MBC slices
+  -> semantic target + SimTier + regularized slice gates
+  -> train+valid merged protected follow-up
+```
+
+Current protected candidate: `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged`.
+
+Latest compact summary: `experiment_summary_2026-05-08.md`.
+<!-- roadmap_reader_note:end -->
+
+
 ## 当前主模型
 
 当前最强 protected candidate 是：SideBias + DIN 风格目标注意力 + click-only 历史 + video-stat dense 特征 + EMA + MBC slices + semantic SimTier sem48 + trainable per-slice gates with regularization，并在最终 protected follow-up 中合并 train+valid 训练。

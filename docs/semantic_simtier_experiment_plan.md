@@ -1,5 +1,21 @@
 # Qwen/LLM 视频语义 SimTier 实验计划
 
+<!-- semantic_reader_note:start -->
+## Reader Note
+
+This document started as the plan for Qwen/LLM semantic SimTier experiments and now also records the final outcome. Training and evaluation do not call an online LLM; semantic vectors are generated offline and consumed as fixed features.
+
+Final status:
+
+- Semantic long-short and late-fusion variants were not promoted.
+- Four-seed fair confirmation selected `semantic_simtier_sem48_slicegate_reg_mid` as the best semantic high-point candidate.
+- The train+valid merged follow-up `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged` is the current best protected candidate.
+- Current protected test AUC/GAUC/LogLoss: `0.754048 / 0.663378 / 0.582084`.
+
+For the overall project state, read `experiment_summary_2026-05-08.md` first.
+<!-- semantic_reader_note:end -->
+
+
 ## 为什么不再做普通 long_short
 
 普通 `long_short` 只在已有 ID/category 行为表示上切分近期与长期兴趣，之前已经没有稳定超过 `sidebias_dinatt_click_only_video_stat_ema_mbc_slices` 保护模型。继续围绕同一 ID embedding 路径做小开关，边际收益很低，也容易只改善 LogLoss 或验证集而不改善 test GAUC。

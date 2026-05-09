@@ -1,5 +1,26 @@
 # 模型对比汇总
 
+<!-- model_comparison_reader_summary:start -->
+## Reader Summary
+
+This file is a compact metrics table for tracked runs. Some late-stage protected follow-up results are summarized here before the legacy table so external readers do not have to infer the current project state from the long run list.
+
+Current headline result:
+
+| Experiment | Test AUC | Test GAUC | Test LogLoss | Status |
+|---|---:|---:|---:|---|
+| `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged` | 0.754048 | 0.663378 | 0.582084 | Current protected candidate |
+| `semantic_simtier_sem48_slicegate_reg_mid` four-seed mean | 0.747148 | 0.659845 | 0.590712 | Fair-confirmation winner |
+| `semantic_simtier_sem48_slicegate_reg_mid_protected_ccss` | 0.747419 | 0.662450 | 0.590168 | Strong, but does not replace no-validation protected |
+| `protected_mbc_slices` four-seed mean | 0.745561 | 0.657891 | 0.590395 | Previous protected reference |
+
+Selection rule used for fair confirmation: candidates must have seeds 2025-2028 and are ranked by mean test GAUC, then min test GAUC, then lower mean LogLoss.
+
+The detailed table below is useful for historical comparison, but the current recommendation is the protected candidate above.
+<!-- model_comparison_reader_summary:end -->
+
+## Detailed Run Table
+
 | 实验名 | 模型名 | 模式 | 最佳验证轮次 | 最佳验证GAUC | 测试AUC | 测试GAUC | 测试LogLoss | 日志来源 |
 |---|---|---:|---:|---:|---:|---:|---:|---|
 | ads_debug | ads | debug | 7 | 0.626946 | 0.65628 | 0.613512 | 0.646217 | logs/train_ads_debug.log |
@@ -77,7 +98,7 @@
 | sidebias_dinatt_click_only_no_category | ads_transformer_side | full | 5 | 0.661802 | 0.738465 | 0.646873 | 0.600461 | logs/nohup_sidebias_dinatt_click_only_no_category_full.log |
 | sidebias_time_context | ads_transformer_side | full | 4 | 0.658256 | 0.737989 | 0.644237 | 0.600681 | logs/nohup_sidebias_time_context_full.log |
 
-按测试GAUC排序的最佳完整实验：`sidebias_dinatt_click_only_video_stat_ema_mbc_slices`（0.660225），相对 `video_stat_ema_confirm_seed2026` 提升 `+0.001659`；其 seed-2026 确认测试 GAUC 为 0.659100，仍高于 `video_stat_ema_confirm_seed2026` 的 0.658566，且测试 AUC 和 LogLoss 同时改善，因此当前已确认保护族候选为 `sidebias_dinatt_click_only_video_stat_ema_mbc_slices`。`mbc_gate_init: 0.2` 测试 GAUC 为 0.659271，`mbc_gate_init: 0.05` 测试 GAUC 为 0.659455，均低于同 seed 当前保护候选 0.660225，因此 gate 初始化调参暂不推广；`mbc_branch_dim: 64` 测试 GAUC 为 0.657912，明显退化，拒绝；`mbc_branch_dim: 256` 测试 GAUC 为 0.659231，也低于当前保护候选，因此不推广；`use_mbc_aux_loss: true` 测试 GAUC 为 0.658578，低于 MBC 确认值 0.659100，因此不推广；`mbc_fusion_dim: 128` 测试 GAUC 为 0.658569，扩大 fusion bottleneck 未提升主指标，因此不推广；`mbc_fusion_dim: 32` 测试 GAUC 为 0.658648，缩小 fusion bottleneck 也未超过当前保护候选，因此不推广；`mbc_gate_init: 0.15` 测试 AUC 为 0.746850 但 GAUC 仅 0.658795，主指标未达标，因此不推广；`mbc_gate_init: 0.12` 测试 GAUC 为 0.659435，高于 MBC seed-2026 确认值但仍低于同 seed 保护候选 0.660225，因此不推广；`mbc_gate_init: 0.08` 测试 GAUC 为 0.659784，继续接近但仍低于同 seed 保护候选，因此不推广；`mbc_gate_init: 0.09` 测试 GAUC 回落到 0.659383，低于 gate008 和同 seed 保护候选，因此不推广。 `attn_hidden_dim: 256` 测试 GAUC 为 0.657895，低于当前保护候选和 MBC seed-2026 确认值，因此拒绝。 `attn_hidden_dim: 64` 测试 GAUC 为 0.659065，优于 attn256 但仍低于同 seed 保护候选并略低于 MBC seed-2026 确认值，因此不推广。 `side_attention_bias_scale: 0.05` 测试 GAUC 为 0.656681，明显退化，拒绝；配置级单变量调参阶段到此停止。
+Historical note for the legacy table: before the late semantic protected follow-up, the best listed full experiment by test GAUC in this older table was `sidebias_dinatt_click_only_video_stat_ema_mbc_slices` with test GAUC `0.660225`. That older MBC-slices line is no longer the headline recommendation; the current protected candidate is summarized at the top of this file.
 
 多 seed 候选对比（seed2025-2028，Test GAUC mean/stdev）：protected MBC slices = 0.657891/0.002299；author = 0.658165/0.001113；author+pcrg_token = 0.658521/0.001190；pcrg_token = 0.657438/0.000295。当前按均值看 author+pcrg_token 最高，但相对 protected 仅 +0.000630，差距小于 protected seed 标准差；pcrg_token 最稳定但均值较低。后续若要推广，应优先做统计检验或更多 seed，而非仅看单次最高。
 

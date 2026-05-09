@@ -1,5 +1,31 @@
 # 实验结果跟踪
 
+<!-- tracking_reader_guide:start -->
+## Reader Guide
+
+This file is the detailed audit trail of experiments. It is intentionally long and includes rejected, uncertain, debug-only, and historical runs. External readers should first read `README.md`, `docs/README.md`, and `docs/experiment_summary_2026-05-08.md`.
+
+How to interpret the table:
+
+- `测试GAUC` is the main ranking metric.
+- `测试AUC` and `测试LogLoss` are secondary metrics for global discrimination and calibration.
+- `调试通过` means the code path ran in debug mode; it is not a full experiment conclusion.
+- `拒绝` / `不推广` means the run did not become part of the protected model.
+- `protected` / `保护候选` refers to the model family used as the comparison baseline at that point in time.
+
+Current headline result:
+
+| Item | Value |
+|---|---|
+| Current protected candidate | `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged` |
+| Config | `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged.yaml` |
+| Test AUC / GAUC / LogLoss | `0.754048 / 0.663378 / 0.582084` |
+| Fair-confirmation winner | `semantic_simtier_sem48_slicegate_reg_mid` |
+| Caveat | This is a train+valid merged single-seed follow-up; multi-seed merged confirmation is recommended for strict stability. |
+
+<!-- tracking_reader_guide:end -->
+
+
 当前主要保护候选：`semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged` 测试 AUC/GAUC/LogLoss = 0.754048/0.663378/0.582084。公平确认 winner：`semantic_simtier_sem48_slicegate_reg_mid` 四 seed mean/min GAUC = 0.659845/0.656514。上一代 `video_stat_ema_mbc_slices` seed-2026 确认测试 GAUC = 0.659100；`video_stat_ema` seed-2026 确认测试 GAUC = 0.658566；`video_stat` 确认测试 GAUC = 0.655718；DIN + click_only 确认测试 GAUC = 0.652649；历史保留 SideBias 测试 GAUC = 0.645878。
 
 2026-05-08 语义高点候选公平确认：按用户修正后的原则，不再只用“后续 seed 低于 seed2025 高点”否定候选，而是对保护 MBC slices、sem48、mbcgate005、reg_mid 采用同 seed 集合比较 mean/min/std。当前已盘点：保护 MBC slices 已有 2025-2028 输出但表内只记录到 2026；sem48 已有 2025-2028 四 seed；mbcgate005 已有 2025-2027，缺 2028；reg_mid 已有 2025-2026，缺 2027/2028。已创建缺失配置 `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_mbcgate005_confirm_seed2028`、`sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_confirm_seed2027`、`sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_confirm_seed2028`。`mbcgate005_confirm_seed2028` 已于 2026-05-08 16:57 启动；串行队列 `scripts/run_semantic_highpoint_fair_confirm_queue.sh` 已于 17:00 通过 nohup 启动，当前等待 `mbcgate005_confirm_seed2028` 完成后自动依次运行 `reg_mid_confirm_seed2027` 和 `reg_mid_confirm_seed2028`。队列日志：`logs/nohup_semantic_highpoint_fair_confirm_queue_20260508_170012.log`；队列 PID 文件：`logs/nohup_semantic_highpoint_fair_confirm_queue_20260508_170012.pid`。

@@ -1,5 +1,20 @@
 # KuaiRand CTR/Rerank 实验与模型变更总结
 
+<!-- historical_scope:start -->
+## Historical Scope
+
+This is a historical snapshot from 2026-05-01. It is kept to explain why early model components were added, kept, or rejected. It should not be used as the latest project summary.
+
+Latest status:
+
+- Current protected candidate: `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged`
+- Test AUC / GAUC / LogLoss: `0.754048 / 0.663378 / 0.582084`
+- Latest summary: `experiment_summary_2026-05-08.md`
+- Documentation map: `README.md` and `docs/README.md`
+
+<!-- historical_scope:end -->
+
+
 日期：2026-05-01
 
 本文档汇总 `/root/autodl-tmp/kuaishou-rerank-multidomain-shared` 中主要实验、模型/预处理改动、阶段性结论和当前保护模型状态。

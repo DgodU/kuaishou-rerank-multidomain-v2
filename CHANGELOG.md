@@ -1,5 +1,23 @@
 # 变更日志
 
+<!-- reader_guide:start -->
+## Reader Guide
+
+This changelog records major engineering and experiment milestones. It is not the fastest way to understand the project end-to-end; start with `README.md`, then `docs/README.md`, then `docs/experiment_summary_2026-05-08.md`.
+
+Current headline result:
+
+| Item | Value |
+|---|---|
+| Current protected candidate | `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged` |
+| Config | `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged.yaml` |
+| Test AUC / GAUC / LogLoss | `0.754048 / 0.663378 / 0.582084` |
+| Fair-confirmation winner | `semantic_simtier_sem48_slicegate_reg_mid` |
+| Status | Recommended project candidate; multi-seed confirmation is still recommended before making a strict stability claim. |
+
+<!-- reader_guide:end -->
+
+
 本文档记录项目创建以来的主要工程改动、实验结果和阶段性结论。实验名、配置路径和指标字段保留英文，便于脚本和日志检索。
 
 ## 2026-05-08 - 语义高点公平确认、no-validation protected 与 CCSS

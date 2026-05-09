@@ -1,5 +1,21 @@
 # KuaiRand 实验总结：语义高点公平确认、Protected 更新与 CCSS
 
+<!-- external_reader_context:start -->
+## How to Read This Document
+
+This is the main current-state summary for external readers. It compresses the long experiment history into the latest decision: which model is currently recommended, how that decision was made, and which follow-up directions did not replace it.
+
+For navigation:
+
+- Read `README.md` first for setup and commands.
+- Read `docs/README.md` for the documentation map.
+- Use `experiments/results_tracking.md` only when you need the full per-experiment audit trail.
+- Use `outputs/model_comparison.json` for structured metrics.
+
+The key result is `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged` with test AUC/GAUC/LogLoss = `0.754048 / 0.663378 / 0.582084`.
+<!-- external_reader_context:end -->
+
+
 日期：2026-05-08
 
 本文档是推送 GitHub 前的当前状态总结。更细的逐实验记录见 `experiments/results_tracking.md`，结构化结果见 `outputs/model_comparison.json`。

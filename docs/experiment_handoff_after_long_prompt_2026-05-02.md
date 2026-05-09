@@ -1,5 +1,24 @@
 # KuaiRand 实验交接文档：超长 prompt 之后的工作汇总
 
+<!-- historical_handoff_warning:start -->
+## Historical Handoff Warning
+
+This file is a preserved handoff from 2026-05-02. Many sections below use words like "current" for the state at that time. The latest project state is newer and supersedes those references.
+
+Latest status:
+
+| Item | Value |
+|---|---|
+| Current protected candidate | `sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged` |
+| Config | `configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_sem48_slicegate_reg_mid_protected_train_valid_merged.yaml` |
+| Test AUC / GAUC / LogLoss | `0.754048 / 0.663378 / 0.582084` |
+| Latest summary | `docs/experiment_summary_2026-05-08.md` |
+| Documentation map | `docs/README.md` |
+
+Use this handoff only for historical reasoning and detailed context from the 2026-05-02 experiment phase.
+<!-- historical_handoff_warning:end -->
+
+
 生成时间：2026-05-02
 
 用途：给外部大模型快速更新当前项目、实验状态、已做工作、结论和后续建议。
@@ -548,13 +567,13 @@ sidebias_dinatt_click_only_video_stat_ema_mbc_slices_sideattnscale005
 
 已完成并记录为拒绝。
 
-当前推荐保留模型仍然是：
+2026-05-02 当时推荐保留模型是：
 
 ```text
 sidebias_dinatt_click_only_video_stat_ema_mbc_slices
 ```
 
-当前推荐保护指标：
+2026-05-02 当时推荐保护指标：
 
 ```text
 seed-2025 test_gauc = 0.660225

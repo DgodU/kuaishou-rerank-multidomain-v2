@@ -49,6 +49,7 @@ configs/sidebias_dinatt_click_only_video_stat_ema_mbc_slices_semantic_simtier_se
 
 更多实验记录：
 
+- `docs/README.md`
 - `docs/experiment_summary_2026-05-08.md`
 - `experiments/results_tracking.md`
 - `outputs/model_comparison.json`
@@ -298,6 +299,7 @@ python scripts/generate_qwen_video_embeddings.py --mock_debug --debug
 
 | File | Purpose |
 |---|---|
+| `docs/README.md` | 文档阅读顺序与当前状态索引 |
 | `experiments/results_tracking.md` | 人类可读的逐实验记录 |
 | `outputs/model_comparison.json` | 结构化指标汇总 |
 | `docs/experiment_summary_2026-05-08.md` | 当前阶段总结 |
